@@ -1,4 +1,6 @@
-/* 찐득이 토스 - 모드 흐름: 연습(5구) / 파티 핫시트(인당 3구, 턴 로테이션) */
+/* 찐득이 토스 - 모드 흐름: 연습 / 파티 핫시트 (턴 로테이션 + 동시 크롤 시뮬 옵션)
+ * simMode(파티): 각 턴은 착지까지만 → 라운드 전원 완료 시 전원 동시 크롤 시뮬
+ */
 window.ST = window.ST || {};
 
 (function () {
@@ -9,20 +11,22 @@ window.ST = window.ST || {};
   const Modes = {
     get session() { return session; },
 
-    startPractice(shapeId, mapId) {
+    startPractice(shapeId, mapId, throwsN) {
       session = {
         mode: 'practice',
         shapeId, mapId,
         players: [{ name: '나', color: PLAYER_COLORS[0], throws: [], total: 0, bestHold: 0 }],
-        throwsPer: 5,
+        throwsPer: throwsN || 5,
         cur: 0, round: 0,
         markers: [],
+        pending: [],
+        simMode: false,
         done: false,
       };
       this._beginTurn();
     },
 
-    startParty(n, shapeId, mapId) {
+    startParty(n, shapeId, mapId, throwsN, simMode) {
       session = {
         mode: 'party',
         shapeId, mapId,
@@ -30,9 +34,11 @@ window.ST = window.ST || {};
           name: 'P' + (i + 1), color: PLAYER_COLORS[i % PLAYER_COLORS.length],
           throws: [], total: 0, bestHold: 0,
         })),
-        throwsPer: 3,
+        throwsPer: throwsN || 3,
         cur: 0, round: 0,
         markers: [],
+        pending: [],
+        simMode: simMode !== false,
         done: false,
       };
       this._beginTurn();
@@ -52,25 +58,58 @@ window.ST = window.ST || {};
       if (session.mode === 'party') ST.Audio.play('turn');
     },
 
-    /* Game에서 턴 종료 시 호출. res: {total, holdTime, impact:{x,y}|null, stuck:bool} */
+    /* Game에서 턴 종료 시 호출 */
     onThrowEnd(res) {
       const p = this.curPlayer();
-      p.throws.push(res);
-      p.total += res.total;
-      p.bestHold = Math.max(p.bestHold, res.holdTime || 0);
+      if (res.deferred && res.pending) {
+        // 동시 시뮬 유예: 착지 정보만 보관
+        session.pending.push({
+          player: session.cur, name: p.name, color: p.color,
+          impact: res.pending.impact, res: res.pending.res, ts: res.pending.ts,
+        });
+      } else {
+        p.throws.push(res);
+        p.total += res.total;
+        p.bestHold = Math.max(p.bestHold, res.holdTime || 0);
+      }
       if (res.impact) {
         session.markers.push({
           x: res.impact.x, y: res.impact.y,
-          color: p.color, label: session.mode === 'party' ? p.name : '' + p.throws.length,
+          color: p.color, label: session.mode === 'party' ? p.name : '' + (session.round + 1),
         });
       }
 
       // 턴 로테이션
       session.cur++;
+      let roundEnd = false;
       if (session.cur >= session.players.length) {
         session.cur = 0;
         session.round++;
+        roundEnd = true;
       }
+
+      if (roundEnd && session.simMode && session.pending.length) {
+        const list = session.pending;
+        session.pending = [];
+        setTimeout(() => ST.Game.startSimul(list), 400);
+        return;
+      }
+      this._maybeNext();
+    },
+
+    /* 동시 크롤 시뮬 종료 — 점수 확정 */
+    onSimulEnd(multi) {
+      for (const m of multi) {
+        const p = session.players[m.player];
+        const total = m.result != null ? m.result : ST.Score.finalize(m.ts);
+        p.throws.push({ total, holdTime: m.ts.holdTime || 0, stuck: true });
+        p.total += total;
+        p.bestHold = Math.max(p.bestHold, m.ts.holdTime || 0);
+      }
+      this._maybeNext();
+    },
+
+    _maybeNext() {
       if (session.round >= session.throwsPer) {
         session.done = true;
         this._finish();
@@ -81,7 +120,6 @@ window.ST = window.ST || {};
 
     _finish() {
       const s = session;
-      // 해금 포인트: 세션 전체 획득 점수 누적
       const sum = s.players.reduce((a, p) => a + p.total, 0);
       ST.Score.addEarned(sum);
       ST.Audio.play('fanfare');
@@ -90,8 +128,8 @@ window.ST = window.ST || {};
 
     retry() {
       if (!session) return;
-      if (session.mode === 'practice') this.startPractice(session.shapeId, session.mapId);
-      else this.startParty(session.players.length, session.shapeId, session.mapId);
+      if (session.mode === 'practice') this.startPractice(session.shapeId, session.mapId, session.throwsPer);
+      else this.startParty(session.players.length, session.shapeId, session.mapId, session.throwsPer, session.simMode);
     },
   };
 

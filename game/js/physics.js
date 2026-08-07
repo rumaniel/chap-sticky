@@ -94,7 +94,7 @@ window.ST = window.ST || {};
             f.y > TUNE.WALL_BOTTOM && f.y < TUNE.WALL_BOTTOM + TUNE.WALL_H;
           return inWall
             ? { type: 'wall', x: f.x, y: f.y, vx: f.vx, vy: f.vy, vz: f.vz, spin: f.spin, angle: f.angle }
-            : { type: 'past' };
+            : { type: 'past', x: f.x, y: f.y, vx: f.vx, vy: f.vy, spin: f.spin, angle: f.angle };
         }
         if (f.y <= 0.04 && f.vy < 0) return { type: 'floor', x: f.x, z: f.z };
       }

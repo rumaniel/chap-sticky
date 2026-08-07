@@ -49,6 +49,8 @@ window.ST = window.ST || {};
       this.toyScreen = { x: REST.x, y: REST.y };
       this.flight = this.stuckSt = this.fallAnim = this.bounceAnim = this.flopAnim = null;
       this.impactPos = null;
+      this.multi = null;
+      this._simulDone = false;
       ST.FX.clear();
       ST.Score.clearFloaters();
     },
@@ -73,23 +75,44 @@ window.ST = window.ST || {};
       const cpx = toPx(rw.x, rw.y);
       const wpm = cv.width / T.WALL_W;
       const R = this.map.rings;
-      for (let i = R.radii.length - 1; i >= 0; i--) {
+      // 과녁 — 은은한 힌트 스타일 (맵별 표현)
+      const style = this.map.ringStyle || { color: 'rgba(255,255,255,0.35)', dash: [8, 7] };
+      c.setLineDash(style.dash);
+      c.strokeStyle = style.color;
+      for (let i = 0; i < R.radii.length; i++) {
+        c.lineWidth = i === 0 ? 3.5 : 2.2;
         c.beginPath();
-        c.fillStyle = i % 2 === 0 ? 'rgba(232,86,86,0.82)' : 'rgba(250,246,238,0.82)';
         c.arc(cpx.x, cpx.y, R.radii[i] * rw.unit * wpm, 0, Math.PI * 2);
-        c.fill();
+        c.stroke();
       }
+      c.setLineDash([]);
       c.beginPath();
-      c.fillStyle = 'rgba(255,226,122,0.95)';
-      c.arc(cpx.x, cpx.y, R.radii[0] * rw.unit * wpm * 0.35, 0, Math.PI * 2);
+      c.fillStyle = style.color;
+      c.arc(cpx.x, cpx.y, 5, 0, Math.PI * 2);
       c.fill();
-      // 배율 라벨
-      c.font = '700 ' + Math.round(cv.width * 0.035) + 'px sans-serif';
+      // 냉장고: 자석 장식으로 링 은유
+      if (style.magnets) {
+        const rr = R.radii[1] * rw.unit * wpm;
+        const cols = ['#e86a6a', '#6a9de8', '#e8c76a', '#7ec98f'];
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2;
+          c.beginPath();
+          c.fillStyle = cols[k % 4];
+          c.globalAlpha = 0.6;
+          c.arc(cpx.x + Math.cos(a) * rr, cpx.y + Math.sin(a) * rr, 7, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 1;
+      }
+      // 배율 라벨 (작게, 흐리게)
+      c.font = '700 ' + Math.round(cv.width * 0.024) + 'px sans-serif';
       c.textAlign = 'center';
-      c.fillStyle = 'rgba(60,30,30,0.85)';
+      c.globalAlpha = 0.6;
+      c.fillStyle = style.color;
       R.radii.forEach((rr, i) => {
-        c.fillText('×' + R.mults[i], cpx.x, cpx.y - rr * rw.unit * wpm + cv.width * 0.032);
+        c.fillText('×' + R.mults[i], cpx.x, cpx.y - rr * rw.unit * wpm + cv.width * 0.028);
       });
+      c.globalAlpha = 1;
 
       // 보너스 스팟
       this.map.spots.forEach((sp) => {
@@ -125,7 +148,9 @@ window.ST = window.ST || {};
       this.flight = this.stuckSt = this.fallAnim = this.bounceAnim = this.flopAnim = null;
       this.impactPos = null;
       this.curMult = 0;
+      this.wasStuck = false;
       const s = ST.Modes.session;
+      this.simDefer = !!(s && s.simMode);
       this.hintT = s && s.round === 0 && s.cur === 0 ? 6 : 0;
       ST.Input.enable();
     },
@@ -139,7 +164,14 @@ window.ST = window.ST || {};
       I.onHoldMove = (p) => {
         this.toyScreen.x = Math.max(35, Math.min(445, p.x));
         this.toyScreen.y = Math.max(330, Math.min(775, p.y));
-        if (Math.abs(I.spinVel) > 9 && Math.random() < 0.25) ST.Audio.play('spin');
+        // 스핀 슉슉
+        if (Math.abs(I.spinVel) > 9) {
+          const now = performance.now();
+          if (!this._swishT || now - this._swishT > 90) {
+            this._swishT = now;
+            ST.Audio.sfx.swish(0.3);
+          }
+        }
       };
       I.onCancel = () => { /* 제자리 복귀는 update에서 lerp */ };
       I.onThrow = (flick, spin) => {
@@ -171,22 +203,24 @@ window.ST = window.ST || {};
       if (this.state === 'fly') {
         const f = this.flight;
         const res = ST.Physics.stepFlight(f, dt);
-        // 스핀 트레일
-        if (Math.abs(f.spin) > 5 && Math.random() < 0.6) {
-          const pr = ST.Physics.project(f.x, f.y, f.z);
-          ST.FX.burst(pr.x, pr.y, 1, { speed: 30, size: 4, life: 0.35, grav: 0, color: '#8ad6ff' });
+        // 스핀 트레일 + 비행 슉슉
+        if (Math.abs(f.spin) > 5) {
+          if (Math.random() < 0.6) {
+            const pr = ST.Physics.project(f.x, f.y, f.z);
+            ST.FX.burst(pr.x, pr.y, 1, { speed: 30, size: 4, life: 0.35, grav: 0, color: '#8ad6ff' });
+          }
+          const now = performance.now();
+          if (!this._fswishT || now - this._fswishT > 130) {
+            this._fswishT = now;
+            ST.Audio.sfx.swish(0.12);
+          }
         }
         if (res) this._onFlightEnd(res);
       } else if (this.state === 'stuck') {
         const st = this.stuckSt;
         const evs = ST.Sticky.update(st, dt);
         this.curMult = ST.Score.tickHold(this.ts, st, dt);
-        for (const e of evs) {
-          if (e === 'flip') ST.Audio.play('flip');
-          else if (e === 'land') { ST.Audio.play('land'); ST.FX.addShake(2); this._dustAt(st, 4); }
-          else if (e === 'slip') ST.Audio.play('slip');
-          else if (e === 'fall') this._startFall();
-        }
+        this._handleStickyEvents(evs, st);
         // 초당 점수 틱 표시
         this._tickAcc = (this._tickAcc || 0) + dt;
         if (this._tickAcc >= 1) {
@@ -194,6 +228,37 @@ window.ST = window.ST || {};
           const p = ST.Physics.project(st.x, st.y, T.WALL_Z);
           ST.Score.float(p.x, p.y - 46, '+' + Math.round(ST.Score.HOLD_RATE * this.curMult), { color: '#c7f77a', size: 18, dur: 0.8 });
           ST.Audio.play('tick');
+        }
+      } else if (this.state === 'simul') {
+        let allDone = true;
+        for (const m of this.multi) {
+          if (m.done) continue;
+          allDone = false;
+          if (m.fall) {
+            m.fall.vy -= 9.8 * dt;
+            m.fall.y += m.fall.vy * dt;
+            m.fall.x += m.fall.vx * dt;
+            m.fall.rot += m.fall.rotV * dt;
+            if (m.fall.y <= 0.12) {
+              m.done = true;
+              m.result = ST.Score.finalize(m.ts);
+              ST.Audio.play('thud');
+              const p = ST.Physics.project(m.fall.x, 0.1, T.WALL_Z);
+              ST.FX.burst(p.x, p.y, 8, { color: '#bbb', speed: 80, size: 4, life: 0.4 });
+              ST.Score.float(p.x, p.y - 30, m.name + ' +' + m.result.toLocaleString(), { color: m.color, size: 22, dur: 1.5 });
+            }
+            continue;
+          }
+          const evs = ST.Sticky.update(m.st, dt);
+          ST.Score.tickHold(m.ts, m.st, dt);
+          this._handleStickyEvents(evs, m.st, (kick) => {
+            m.fall = { x: m.st.x, y: m.st.y, vx: kick.vx, vy: kick.vy, rot: m.st.angle, rotV: kick.rotV };
+          });
+        }
+        if (allDone) {
+          this.state = 'done';
+          this.endT = 1.0;
+          this._simulDone = true;
         }
       } else if (this.state === 'fall') {
         const fa = this.fallAnim;
@@ -206,7 +271,7 @@ window.ST = window.ST || {};
           ST.FX.addShake(4);
           const p = ST.Physics.project(fa.x, 0.1, T.WALL_Z);
           ST.FX.burst(p.x, p.y, 10, { color: '#bbb', speed: 90, size: 4, life: 0.5 });
-          this._endThrow(true);
+          this._endThrow(this.wasStuck);
         }
       } else if (this.state === 'bounceoff') {
         const b = this.bounceAnim;
@@ -228,6 +293,35 @@ window.ST = window.ST || {};
           const r = this._doneRes;
           this._doneRes = null;
           ST.Modes.onThrowEnd(r);
+        } else if (this.endT <= 0 && this._simulDone) {
+          this._simulDone = false;
+          const multi = this.multi;
+          this.multi = null;
+          ST.Modes.onSimulEnd(multi);
+        }
+      }
+    },
+
+    // 부착 상태 이벤트 공통 처리 (solo/simul). onFall: 낙하 시작 콜백(없으면 solo 낙하)
+    _handleStickyEvents(evs, st, onFall) {
+      for (const e of evs) {
+        const t = e.type || e;
+        if (t === 'flip') ST.Audio.play('flip');
+        else if (t === 'land') { ST.Audio.play('land'); ST.FX.addShake(2); this._dustAt(st, 4); }
+        else if (t === 'slip') ST.Audio.play('slip');
+        else if (t === 'peelstart') ST.Audio.play('peel');
+        else if (t === 'swing') ST.Audio.play('slip');
+        else if (t === 'pop') {
+          ST.Audio.play('pop');
+          const T = ST.Physics.TUNE;
+          const px = e.x != null ? e.x : st.x, py = e.y != null ? e.y : st.y;
+          const p = ST.Physics.project(px, py, T.WALL_Z);
+          ST.FX.burst(p.x, p.y, 5, { color: st.shape.light, speed: 90, size: 4, life: 0.35 });
+        } else if (t === 'fall') {
+          const kick = st.fallKick || { vx: st.driftX * 20, vy: 0.3, rotV: (st.flipDir || 1) * 6 };
+          ST.Audio.play('fallWhistle');
+          if (onFall) onFall(kick);
+          else this._startFall(kick);
         }
       }
     },
@@ -239,21 +333,39 @@ window.ST = window.ST || {};
         const r = ST.Sticky.resolveImpact(res, shape, map);
         const p = ST.Physics.project(res.x, res.y, T.WALL_Z);
         if (r.stuck) {
-          this.stuckSt = ST.Sticky.createStuck(r, res, shape, map);
           this.impactPos = { x: res.x, y: res.y };
           ST.Score.onStick(this.ts, r, res, map);
-          this.state = 'stuck';
           ST.Audio.play('splat');
           if (r.perfect) ST.Audio.play('perfect');
+          else if (r.quality > 0.6) ST.Audio.play('goodStick');
+          if (this.ts.bonuses.some((b) => b.text.startsWith('커브'))) ST.Audio.play('curveHit');
           ST.FX.addShake(r.perfect ? 8 : 5);
           ST.FX.addHitstop(0.07);
           ST.FX.burst(p.x, p.y, 14, { color: shape.light, speed: 150, size: 5, life: 0.45 });
-          // 보너스 플로터
           this.ts.bonuses.forEach((b, i) => {
             if (!b.live) setTimeout(() => ST.Score.float(p.x, p.y - 60 - i * 26, b.text, { color: b.color, size: 24 }), 150 + i * 220);
           });
+          if (this.simDefer) {
+            // 파티 동시 시뮬: 착지까지만, 크롤은 라운드 끝에 일괄
+            ST.Score.float(p.x, p.y - 34, '착!', { color: '#ffe27a', size: 26 });
+            this.wasStuck = true;
+            this._pendingStick = { impact: res, res: r, ts: this.ts };
+            this._endThrow(true, true);
+          } else {
+            this.stuckSt = ST.Sticky.createStuck(r, res, shape, map);
+            this.wasStuck = true;
+            this.state = 'stuck';
+          }
+        } else if (r.reason === 'nogrip') {
+          // 그립 없는 존 → 툭 치고 낙하
+          ST.Audio.play('pop');
+          ST.Audio.play('sadDrop');
+          ST.FX.burst(p.x, p.y, 8, { color: '#ccc', speed: 90, size: 4, life: 0.35 });
+          ST.Score.float(p.x, p.y - 40, '안 붙는 곳!', { color: '#c9c0e8', size: 24 });
+          this.fallAnim = { x: res.x, y: res.y, vx: res.vx * 0.15, vy: 0, rot: res.angle, rotV: (Math.random() - 0.5) * 8 };
+          this.state = 'fall';
         } else {
-          // 튕겨나감
+          // 너무 세다 → 튕겨나감
           this.state = 'bounceoff';
           this.bounceAnim = {
             x: res.x, y: res.y, z: T.WALL_Z,
@@ -262,6 +374,7 @@ window.ST = window.ST || {};
             rot: res.angle, rotV: (Math.random() - 0.5) * 14,
           };
           ST.Audio.play('bounce');
+          ST.Audio.play('stingBad');
           ST.FX.addShake(6);
           ST.FX.burst(p.x, p.y, 10, { color: '#fff', speed: 120, size: 4, life: 0.35 });
           ST.Score.float(p.x, p.y - 40, '너무 세다!', { color: '#ff9d76', size: 26 });
@@ -271,23 +384,43 @@ window.ST = window.ST || {};
         this.flopAnim = { x: res.x, z: res.z, t: 0 };
         const p = ST.Physics.project(res.x, 0.05, res.z);
         ST.Audio.play('thud');
+        ST.Audio.play('sadDrop');
         ST.FX.burst(p.x, p.y, 8, { color: '#a89878', speed: 80, size: 4, life: 0.4 });
         ST.Score.float(p.x, p.y - 30, '철퍼덕...', { color: '#c9b8a0', size: 24 });
-      } else { // past
-        ST.Score.float(240, 300, '벽 밖으로...!', { color: '#9d92c7', size: 26 });
-        this._endThrow(false);
+      } else { // past — 존 밖, 시각적으로 떨어짐
+        ST.Score.float(240, 300, '존 밖으로!', { color: '#9d92c7', size: 24 });
+        ST.Audio.play('sadDrop');
+        this.fallAnim = {
+          x: res.x, y: Math.max(res.y, 0.5), vx: res.vx * 0.2, vy: Math.min(0, res.vy * 0.2),
+          rot: res.angle, rotV: (res.spin || 8) * 0.4,
+        };
+        this.state = 'fall';
       }
     },
 
-    _startFall() {
+    _startFall(kick) {
       const st = this.stuckSt;
-      ST.Audio.play('peel');
-      ST.Audio.play('fallWhistle');
       this.fallAnim = {
-        x: st.x, y: st.y, vx: st.driftX * 20, vy: 0.3,
-        rot: st.angle, rotV: (st.flipDir || 1) * 6,
+        x: st.x, y: st.y, vx: kick.vx, vy: kick.vy,
+        rot: st.angle, rotV: kick.rotV,
       };
       this.state = 'fall';
+    },
+
+    /* 파티 동시 시뮬 시작. list: [{player,name,color,impact,res,ts}] */
+    startSimul(list) {
+      ST.UI.showGame();
+      this.turnLabel = '동시 크롤 스타트!';
+      this.turnColor = '#ffe27a';
+      this.banner = { t: 1.2 };
+      this.state = 'simul';
+      this.multi = list.map((it) => ({
+        player: it.player, name: it.name, color: it.color, ts: it.ts,
+        st: ST.Sticky.createStuck(it.res, it.impact, this.shape, this.map),
+        fall: null, done: false, result: null,
+      }));
+      ST.Audio.play('turn');
+      ST.Input.disable();
     },
 
     _dustAt(st, n) {
@@ -295,7 +428,20 @@ window.ST = window.ST || {};
       ST.FX.burst(p.x, p.y + 12, n, { color: '#ffffff88', speed: 50, size: 3, life: 0.3, grav: 60 });
     },
 
-    _endThrow(wasStuck) {
+    _endThrow(wasStuck, deferred) {
+      if (deferred) {
+        // 시뮬 유예: 점수 확정하지 않고 착지 정보만 전달
+        this.state = 'done';
+        this.endT = 0.55;
+        this._doneRes = {
+          total: 0, holdTime: 0,
+          impact: this.impactPos,
+          stuck: true, deferred: true,
+          pending: this._pendingStick,
+        };
+        this._pendingStick = null;
+        return;
+      }
       const total = ST.Score.finalize(this.ts);
       if (total > 0) {
         ST.Score.float(240, 360, '합계 +' + total.toLocaleString(), { color: '#ffe27a', size: 34, dur: 1.4 });
@@ -379,6 +525,39 @@ window.ST = window.ST || {};
         }
       }
 
+      // ---- 파티 동시 시뮬: 전원 찐득이 ----
+      if (this.state === 'simul' && this.multi) {
+        for (const m of this.multi) {
+          if (m.done) continue;
+          const pos = m.fall || m.st;
+          const p = ST.Physics.project(pos.x, pos.y, T.WALL_Z);
+          const S = ST.Sticky.TOY_R * T.PPM * p.s * 1.1;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(m.fall ? m.fall.rot : m.st.angle);
+          this.shape.draw(ctx, S, m.fall
+            ? { wob: 1, t: this.time + m.player, mood: 'dizzy' }
+            : { wob: m.st.wob, t: this.time + m.player, squash: m.st.squash, mood: m.st.mood, contacts: m.st.contacts });
+          ctx.restore();
+          // 플레이어 색 링 + 이름표
+          ctx.strokeStyle = m.color;
+          ctx.lineWidth = 3;
+          ctx.globalAlpha = 0.85;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, S + 9, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.font = '700 13px "Malgun Gothic", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+          ctx.strokeText(m.name, p.x, p.y - S - 16);
+          ctx.fillStyle = m.color;
+          ctx.fillText(m.name, p.x, p.y - S - 16);
+          if (!m.fall) this._drawGrip(p.x, p.y - S - 34, m.st.gh);
+        }
+      }
+
       // ---- 찐득이 ----
       if (this.state === 'stuck' && this.stuckSt) {
         const st = this.stuckSt;
@@ -447,18 +626,19 @@ window.ST = window.ST || {};
           ctx.rotate(spinRot);
           this.shape.draw(ctx, S, { wob: ST.Input.holding ? 0.35 : 0.12, t: this.time, mood: 'happy' });
           ctx.restore();
-          // 스핀 인디케이터
+          // 스핀 인디케이터 — 빠른 이중 호 (텍스트 없음)
           if (ST.Input.holding && Math.abs(ST.Input.spinCharge) > 2.5) {
-            ctx.strokeStyle = '#8ad6ff';
-            ctx.lineWidth = 4;
             const dir = Math.sign(ST.Input.spinCharge);
+            const spd = this.time * 9 * dir;
+            ctx.strokeStyle = 'rgba(138,214,255,0.9)';
+            ctx.lineWidth = 4;
             ctx.beginPath();
-            ctx.arc(t.x, t.y, S + 18, this.time * 4 * dir, this.time * 4 * dir + 1.5);
+            ctx.arc(t.x, t.y, S + 16, spd, spd + 1.3);
             ctx.stroke();
-            ctx.font = '900 20px "Malgun Gothic", sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillStyle = '#8ad6ff';
-            ctx.fillText('커브!', t.x, t.y - S - 26);
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, S + 27, spd + Math.PI, spd + Math.PI + 1.0);
+            ctx.stroke();
           }
         }
       }
@@ -538,13 +718,23 @@ window.ST = window.ST || {};
         }
       }
 
-      // 세션 합계 (파티: 전원 / 연습: 나)
+      // 세션 합계 (파티: 전원 / 연습: 나) — 시뮬 중엔 실시간 반영
       ctx.textAlign = 'left';
       ctx.font = '600 13px "Malgun Gothic", sans-serif';
       let yy = 52;
       s.players.forEach((pl, i) => {
-        ctx.fillStyle = i === s.cur ? '#fff' : 'rgba(255,255,255,0.55)';
-        ctx.fillText((i === s.cur ? '▶ ' : '   ') + pl.name + '  ' + pl.total.toLocaleString(), 14, yy);
+        let tot = pl.total;
+        let live = false;
+        if (this.state === 'simul' && this.multi) {
+          const m = this.multi.find((mm) => mm.player === i);
+          if (m) {
+            tot += m.done ? (m.result || 0) : Math.round(m.ts.holdScore + m.ts.throwBonus);
+            live = !m.done;
+          }
+        }
+        const cur = this.state === 'simul' ? live : i === s.cur;
+        ctx.fillStyle = cur ? '#fff' : 'rgba(255,255,255,0.55)';
+        ctx.fillText((cur ? '▶ ' : '   ') + pl.name + '  ' + tot.toLocaleString(), 14, yy);
         yy += 19;
       });
     },

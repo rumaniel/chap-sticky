@@ -70,6 +70,8 @@
   }
   .stepper button:active { transform: translateY(3px); box-shadow: 0 1px 0 #3f8f3f; }
   .stepper .num { font-size: 44px; font-weight: 900; min-width: 80px; color: #fff; }
+  .stepper.small button { width: 42px; height: 42px; font-size: 20px; }
+  .stepper.small .num { font-size: 30px; min-width: 56px; }
 
   /* select cards */
   .cards { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 460px; }
@@ -140,6 +142,8 @@
         <button id="pPlus">+</button>
       </div>
       <div class="hint">한 기기로 번갈아 던집니다 (2~8명)</div>
+      <button class="btn sub mini" id="btnSimToggle">🎬 동시 결과: ON</button>
+      <div class="hint">ON: 전원 던진 뒤 한 벽에서 동시에 크롤 대결<br>OFF: 던질 때마다 바로 결과</div>
       <button class="btn" id="btnPartyGo">다음 →</button>
       <button class="btn sub mini" id="btnPartyBack">← 뒤로</button>
     </div>
@@ -150,6 +154,12 @@
       <div class="cards" id="shapeCards"></div>
       <h2 class="title" style="margin-top:8px">맵 선택</h2>
       <div class="cards" id="mapCards"></div>
+      <h2 class="title" style="margin-top:8px">몇 구 던질까?</h2>
+      <div class="stepper small">
+        <button id="tMinus">−</button>
+        <div class="num" id="tCount">5</div>
+        <button id="tPlus">+</button>
+      </div>
       <button class="btn" id="btnPlay">던지러 가기!</button>
       <button class="btn sub mini" id="btnSelBack">← 뒤로</button>
     </div>

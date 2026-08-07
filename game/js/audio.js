@@ -74,6 +74,18 @@ window.ST = window.ST || {};
     ui() { tone('square', 660, 880, 0.08, 0.12); },
     grab() { tone('sine', 300, 380, 0.06, 0.1); },
     spin() { tone('sine', 500 + Math.random() * 300, 700, 0.05, 0.05); },
+    // 스핀 슉슉 (홀드 중 강하게, 비행 중 약하게)
+    swish(vol) { noise(0.09, vol || 0.28, 1100, 3400, { q: 1.6, attack: 0.012 }); },
+    // 포인트 분리 "뽁"
+    pop() { tone('sine', 420 + Math.random() * 120, 900, 0.06, 0.3, { attack: 0.004 }); },
+    // 너무 셈: 낮은 부정 스팅
+    stingBad() { tone('sawtooth', 220, 210, 0.28, 0.16); tone('sawtooth', 233, 222, 0.28, 0.16); },
+    // 너무 약함: 하강 2음
+    sadDrop() { tone('triangle', 392, 392, 0.18, 0.2); tone('triangle', 311, 300, 0.3, 0.2, { delay: 0.16 }); },
+    // 좋은 부착 "띠링"
+    goodStick() { tone('sine', 660, 660, 0.12, 0.2, { delay: 0.05 }); tone('sine', 990, 990, 0.18, 0.2, { delay: 0.14 }); },
+    // 커브 성공 스파클
+    curveHit() { [740, 932, 1244, 1480].forEach((f, i) => tone('sine', f, f * 1.02, 0.12, 0.16, { delay: i * 0.045 })); },
     whoosh() { noise(0.28, 0.5, 500, 3200, { q: 0.9, attack: 0.02 }); },
     splat() {
       tone('sine', 260, 60, 0.22, 0.6, { attack: 0.004 });

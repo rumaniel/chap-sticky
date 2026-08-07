@@ -1,7 +1,10 @@
 /* 찐득이 토스 - 벽 머테리얼/맵 레지스트리
  * mat: grip(접착 배율), decay(그립 감쇠/초), flipPeriod(크롤 회전 주기 s),
  *      slideStep(플립당 하강 배율), slideCont(연속 미끄러짐 px/s), bounce(튕김 반발)
+ * zone: 머테리얼 유효 영역(정규화). 밖 = 그립 없음(낙하)
+ * noGrip: 같은 벽면 안의 그립 없는 세부 영역(창틀·테두리 등) — 멀티 머테리얼 존
  * rings: 과녁 (벽 정규화 좌표, 반경은 min(w,h) 비율), mults 배율
+ * ringStyle: 맵별 과녁 표현(은은한 힌트)
  * spots: 보너스 스팟
  */
 window.ST = window.ST || {};
@@ -15,6 +18,7 @@ window.ST = window.ST || {};
       mat: { grip: 1.0, decay: 0.055, flipPeriod: 1.15, slideStep: 1.0, slideCont: 0, bounce: 0.5 },
       skyColor: '#3a2f5c', floorColor: ['#6b5b3e', '#4a3d28'],
       rings: { cx: 0.5, cy: 0.50, radii: [0.10, 0.20, 0.31, 0.44], mults: [5, 3, 2, 1] },
+      ringStyle: { color: 'rgba(130,95,60,0.5)', dash: [9, 8] }, // 벽지 얼룩 느낌
       spots: [
         { x: 0.14, y: 0.16, r: 0.055, bonus: 150, icon: '★' },
         { x: 0.86, y: 0.62, r: 0.055, bonus: 150, icon: '★' },
@@ -44,7 +48,13 @@ window.ST = window.ST || {};
       id: 'glass', name: '유리창', desc: '미끌미끌! 살살 던져야 붙는다', unlock: 3000,
       mat: { grip: 0.85, decay: 0.085, flipPeriod: 0.85, slideStep: 1.25, slideCont: 26, bounce: 0.62 },
       skyColor: '#274a73', floorColor: ['#5a6b7d', '#3a4757'],
+      // 창틀 십자 = 그립 없음 (멀티 머테리얼 존)
+      noGrip: [
+        { x0: 0.478, y0: 0, x1: 0.522, y1: 1 },
+        { x0: 0, y0: 0.478, x1: 1, y1: 0.522 },
+      ],
       rings: { cx: 0.5, cy: 0.50, radii: [0.10, 0.20, 0.31, 0.44], mults: [6, 4, 2, 1] },
+      ringStyle: { color: 'rgba(255,255,255,0.5)', dash: [4, 7] }, // 김서림 낙서
       spots: [
         { x: 0.18, y: 0.70, r: 0.055, bonus: 200, icon: '🐦' },
         { x: 0.82, y: 0.18, r: 0.055, bonus: 200, icon: '☀' },
@@ -85,7 +95,10 @@ window.ST = window.ST || {};
       id: 'chalk', name: '교실 칠판', desc: '착착 붙는다 · 오래 버티기 명당', unlock: 10000,
       mat: { grip: 1.3, decay: 0.032, flipPeriod: 1.4, slideStep: 0.85, slideCont: 0, bounce: 0.42 },
       skyColor: '#4a3b2a', floorColor: ['#8a7355', '#5f4d36'],
+      // 나무 테두리 = 그립 없음, 칠판 안쪽만 유효
+      zone: { x0: 0.045, y0: 0.045, x1: 0.955, y1: 0.94 },
       rings: { cx: 0.5, cy: 0.50, radii: [0.10, 0.20, 0.31, 0.44], mults: [4, 3, 2, 1] },
+      ringStyle: { color: 'rgba(255,255,255,0.45)', dash: [7, 6] }, // 분필 원
       spots: [
         { x: 0.15, y: 0.20, r: 0.06, bonus: 120, icon: '100' },
         { x: 0.85, y: 0.24, r: 0.06, bonus: 120, icon: 'A+' },
@@ -118,7 +131,10 @@ window.ST = window.ST || {};
       id: 'fridge', name: '냉장고', desc: '자석 스팟 대박 보너스!', unlock: 20000,
       mat: { grip: 0.9, decay: 0.05, flipPeriod: 1.05, slideStep: 1.0, slideCont: 4, bounce: 0.55 },
       skyColor: '#2d3f4a', floorColor: ['#8f9aa5', '#5d6771'],
+      // 손잡이 = 그립 없음
+      noGrip: [{ x0: 0.9, y0: 0.32, x1: 0.99, y1: 0.66 }],
       rings: { cx: 0.5, cy: 0.46, radii: [0.09, 0.18, 0.29, 0.42], mults: [5, 3, 2, 1] },
+      ringStyle: { color: 'rgba(120,140,160,0.45)', dash: [2, 9], magnets: true }, // 자석 배열
       spots: [
         { x: 0.2, y: 0.14, r: 0.06, bonus: 300, icon: '🧲' },
         { x: 0.8, y: 0.30, r: 0.06, bonus: 300, icon: '🧲' },
@@ -155,6 +171,22 @@ window.ST = window.ST || {};
     all: MAPS,
     list: ['room', 'glass', 'chalk', 'fridge'].map((k) => MAPS[k]),
     get(id) { return MAPS[id] || MAPS.room; },
+
+    /* 벽면 좌표(월드 m)의 머테리얼. 존 밖/노그립 영역 = null (안 붙음) */
+    materialAt(map, x, y) {
+      const T = ST.Physics.TUNE;
+      const nx = (x + T.WALL_W / 2) / T.WALL_W;
+      const ny = (T.WALL_BOTTOM + T.WALL_H - y) / T.WALL_H;
+      if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return null;
+      const z = map.zone;
+      if (z && (nx < z.x0 || nx > z.x1 || ny < z.y0 || ny > z.y1)) return null;
+      if (map.noGrip) {
+        for (const r of map.noGrip) {
+          if (nx >= r.x0 && nx <= r.x1 && ny >= r.y0 && ny <= r.y1) return null;
+        }
+      }
+      return map.mat;
+    },
 
     // 맵 미리보기 카드
     preview(canvas, id) {

@@ -4,6 +4,8 @@ window.ST = window.ST || {};
 (function () {
   const $ = (id) => document.getElementById(id);
   let partyN = 2;
+  let throwsN = 5;
+  let simMode = true;
   let nextMode = 'practice';
   let titleAnim = null;
 
@@ -144,19 +146,29 @@ window.ST = window.ST || {};
       wire('btnBoard', () => this.showBoard());
       wire('btnBoardBack', () => show('scr-title'));
       wire('btnModeBack', () => show('scr-title'));
-      wire('btnPractice', () => { nextMode = 'practice'; buildCards(); show('scr-select'); });
+      const setThrows = (n) => {
+        throwsN = Math.max(1, Math.min(10, n));
+        $('tCount').textContent = throwsN;
+      };
+      wire('btnPractice', () => { nextMode = 'practice'; setThrows(5); buildCards(); show('scr-select'); });
       wire('btnParty', () => { show('scr-party'); });
       wire('btnPartyBack', () => show('scr-mode'));
-      wire('btnPartyGo', () => { nextMode = 'party'; buildCards(); show('scr-select'); });
+      wire('btnPartyGo', () => { nextMode = 'party'; setThrows(3); buildCards(); show('scr-select'); });
       wire('btnSelBack', () => show(nextMode === 'party' ? 'scr-party' : 'scr-mode'));
       wire('btnPlay', () => {
-        if (nextMode === 'party') ST.Modes.startParty(partyN, ST.sel.shape, ST.sel.map);
-        else ST.Modes.startPractice(ST.sel.shape, ST.sel.map);
+        if (nextMode === 'party') ST.Modes.startParty(partyN, ST.sel.shape, ST.sel.map, throwsN, simMode);
+        else ST.Modes.startPractice(ST.sel.shape, ST.sel.map, throwsN);
       });
       wire('btnRetry', () => ST.Modes.retry());
       wire('btnResMenu', () => show('scr-title'));
       wire('pMinus', () => { partyN = Math.max(2, partyN - 1); $('pCount').textContent = partyN; });
       wire('pPlus', () => { partyN = Math.min(8, partyN + 1); $('pCount').textContent = partyN; });
+      wire('tMinus', () => setThrows(throwsN - 1));
+      wire('tPlus', () => setThrows(throwsN + 1));
+      wire('btnSimToggle', () => {
+        simMode = !simMode;
+        $('btnSimToggle').textContent = '🎬 동시 결과: ' + (simMode ? 'ON' : 'OFF');
+      });
 
       $('btnSaveScore').addEventListener('click', () => {
         ST.Audio.play('ui');
