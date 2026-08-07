@@ -15,6 +15,8 @@
     touch-action: none;
     user-select: none; -webkit-user-select: none;
     overscroll-behavior: none;
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
   #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
   #game { display: block; background: #2a2145; }
@@ -51,8 +53,10 @@
     box-shadow: 0 5px 0 #3f8f3f, 0 8px 14px rgba(0,0,0,.35);
     transition: transform .06s, box-shadow .06s;
     min-width: 230px;
+    word-break: keep-all;
   }
   .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #3f8f3f; }
+  .btn .bsub { font-size: 13px; font-weight: 400; }
   .btn.sub { background: linear-gradient(180deg, #e6ddff, #b9a5f5); box-shadow: 0 5px 0 #6d51c4, 0 8px 14px rgba(0,0,0,.35); color: #2d2255; font-size: 17px; }
   .btn.sub:active { box-shadow: 0 1px 0 #6d51c4; }
   .btn.mini { min-width: 0; font-size: 15px; padding: 9px 18px; border-radius: 12px; }
@@ -101,13 +105,12 @@
   }
   .row { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
 
-  #sndToggle {
-    position: absolute; top: 10px; right: 10px; z-index: 20;
+  .fabBtn {
+    position: absolute; z-index: 20;
     font-size: 20px; width: 44px; height: 44px; border-radius: 50%;
     border: none; background: rgba(255,255,255,.15); color: #fff; cursor: pointer;
-    display: none;
   }
-  #sndToggle.show { display: block; }
+  #langToggle { font-size: 15px; font-weight: 800; }
 </style>
 </head>
 <body>
@@ -116,80 +119,82 @@
   <div id="overlay">
     <!-- 타이틀 -->
     <div class="screen" id="scr-title">
-      <div class="logo">찐득이<br>토스!</div>
-      <div class="logo-sub">STICKY TOSS</div>
+      <div class="logo" data-i18n="logo"></div>
+      <div class="logo-sub" data-i18n="logoSub"></div>
       <canvas id="titleToy" width="140" height="140"></canvas>
-      <div class="tagline">벽에 던져라, 붙어라, 버텨라!</div>
-      <button class="btn" id="btnStart">시작하기</button>
-      <button class="btn sub" id="btnBoard">🏆 리더보드</button>
-      <div class="hint">추억의 찐득이 장난감을 진짜 물리로!<br>드래그로 던지고, 빙글빙글 돌려 커브볼도 가능</div>
+      <div class="tagline" data-i18n="tagline"></div>
+      <button class="btn" id="btnStart" data-i18n="btn.start"></button>
+      <button class="btn sub" id="btnBoard" data-i18n="btn.board"></button>
+      <div class="hint" data-i18n="titleHint"></div>
     </div>
 
     <!-- 모드 선택 -->
     <div class="screen" id="scr-mode">
-      <h2 class="title">모드 선택</h2>
-      <button class="btn" id="btnPractice">🎯 연습 모드<br><span style="font-size:13px;font-weight:400">혼자서 최고 기록에 도전 (5구)</span></button>
-      <button class="btn" id="btnParty">🎉 파티 모드<br><span style="font-size:13px;font-weight:400">친구들과 번갈아 던지기 (각 3구)</span></button>
-      <button class="btn sub mini" id="btnModeBack">← 뒤로</button>
+      <h2 class="title" data-i18n="mode.title"></h2>
+      <button class="btn" id="btnPractice"><span data-i18n="mode.practice"></span><br><span class="bsub" data-i18n="mode.practiceDesc"></span></button>
+      <button class="btn" id="btnParty"><span data-i18n="mode.party"></span><br><span class="bsub" data-i18n="mode.partyDesc"></span></button>
+      <button class="btn sub mini" id="btnModeBack" data-i18n="btn.back"></button>
     </div>
 
     <!-- 파티 인원 -->
     <div class="screen" id="scr-party">
-      <h2 class="title">몇 명이서 할까?</h2>
+      <h2 class="title" data-i18n="party.title"></h2>
       <div class="stepper">
         <button id="pMinus">−</button>
         <div class="num" id="pCount">2</div>
         <button id="pPlus">+</button>
       </div>
-      <div class="hint">한 기기로 번갈아 던집니다 (2~8명)</div>
-      <button class="btn sub mini" id="btnSimToggle">🎬 동시 결과: ON</button>
-      <div class="hint">ON: 전원 던진 뒤 한 벽에서 동시에 크롤 대결<br>OFF: 던질 때마다 바로 결과</div>
-      <button class="btn" id="btnPartyGo">다음 →</button>
-      <button class="btn sub mini" id="btnPartyBack">← 뒤로</button>
+      <div class="hint" data-i18n="party.hint"></div>
+      <button class="btn sub mini" id="btnSimToggle"></button>
+      <div class="hint" data-i18n="party.simHint"></div>
+      <button class="btn" id="btnPartyGo" data-i18n="btn.next"></button>
+      <button class="btn sub mini" id="btnPartyBack" data-i18n="btn.back"></button>
     </div>
 
-    <!-- 찐득이/맵 선택 -->
+    <!-- 찐득이/맵/구 수 선택 -->
     <div class="screen" id="scr-select">
-      <h2 class="title">찐득이 선택</h2>
+      <h2 class="title" data-i18n="sel.shape"></h2>
       <div class="cards" id="shapeCards"></div>
-      <h2 class="title" style="margin-top:8px">맵 선택</h2>
+      <h2 class="title" style="margin-top:8px" data-i18n="sel.map"></h2>
       <div class="cards" id="mapCards"></div>
-      <h2 class="title" style="margin-top:8px">몇 구 던질까?</h2>
+      <h2 class="title" style="margin-top:8px" data-i18n="sel.throws"></h2>
       <div class="stepper small">
         <button id="tMinus">−</button>
         <div class="num" id="tCount">5</div>
         <button id="tPlus">+</button>
       </div>
-      <button class="btn" id="btnPlay">던지러 가기!</button>
-      <button class="btn sub mini" id="btnSelBack">← 뒤로</button>
+      <button class="btn" id="btnPlay" data-i18n="btn.play"></button>
+      <button class="btn sub mini" id="btnSelBack" data-i18n="btn.back"></button>
     </div>
 
     <!-- 결과 -->
     <div class="screen" id="scr-result">
-      <h2 class="title" id="resTitle">라운드 결과</h2>
+      <h2 class="title" id="resTitle"></h2>
       <div class="bigscore" id="resScore"></div>
       <div class="hint" id="resSub"></div>
       <div id="resTableWrap"></div>
       <div class="row" id="nameEntry" style="display:none">
-        <input class="name" id="nameInput" maxlength="8" placeholder="이름 입력">
-        <button class="btn mini" id="btnSaveScore">기록 저장</button>
+        <input class="name" id="nameInput" maxlength="8" data-i18n-ph="res.namePh">
+        <button class="btn mini" id="btnSaveScore" data-i18n="btn.save"></button>
       </div>
       <div class="row">
-        <button class="btn" id="btnRetry">🔄 한판 더</button>
-        <button class="btn sub" id="btnResMenu">메뉴로</button>
+        <button class="btn" id="btnRetry" data-i18n="btn.retry"></button>
+        <button class="btn sub" id="btnResMenu" data-i18n="btn.menu"></button>
       </div>
     </div>
 
     <!-- 리더보드 -->
     <div class="screen" id="scr-board">
-      <h2 class="title">🏆 리더보드</h2>
+      <h2 class="title" data-i18n="board.title"></h2>
       <div id="boardWrap"></div>
-      <button class="btn sub mini" id="btnBoardBack">← 뒤로</button>
+      <button class="btn sub mini" id="btnBoardBack" data-i18n="btn.back"></button>
     </div>
   </div>
-  <button id="sndToggle">🔊</button>
+  <button class="fabBtn" id="sndToggle">🔊</button>
+  <button class="fabBtn" id="langToggle">EN</button>
 </div>
 
+<script src="js/i18n.js"></script>
 <script src="js/shapes.js"></script>
 <script src="js/materials.js"></script>
 <script src="js/audio.js"></script>

@@ -22,6 +22,12 @@ window.ST = window.ST || {};
     const ov = document.getElementById('overlay');
     ov.style.width = cw + 'px';
     ov.style.height = chh + 'px';
+    // FAB 버튼(사운드/언어)을 캔버스 우하단에 정렬
+    const left = Math.round((vw - cw) / 2), top = Math.round((vh - chh) / 2);
+    const snd = document.getElementById('sndToggle');
+    const lng = document.getElementById('langToggle');
+    if (snd) { snd.style.left = (left + cw - 54) + 'px'; snd.style.top = (top + chh - 54) + 'px'; }
+    if (lng) { lng.style.left = (left + cw - 54) + 'px'; lng.style.top = (top + chh - 104) + 'px'; }
   }
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 100));
@@ -194,10 +200,12 @@ window.ST = window.ST || {};
 
       const T = ST.Physics.TUNE;
 
-      if (this.state === 'aim' && !ST.Input.holding) {
-        // 제자리 복귀
-        this.toyScreen.x += (REST.x - this.toyScreen.x) * Math.min(1, dt * 10);
-        this.toyScreen.y += (REST.y - this.toyScreen.y) * Math.min(1, dt * 10);
+      if (this.state === 'aim') {
+        ST.Input.tick(dt); // 스핀 멈추면 커브 이펙트 자연 소멸
+        if (!ST.Input.holding) {
+          this.toyScreen.x += (REST.x - this.toyScreen.x) * Math.min(1, dt * 10);
+          this.toyScreen.y += (REST.y - this.toyScreen.y) * Math.min(1, dt * 10);
+        }
       }
 
       if (this.state === 'fly') {
@@ -347,7 +355,7 @@ window.ST = window.ST || {};
           });
           if (this.simDefer) {
             // 파티 동시 시뮬: 착지까지만, 크롤은 라운드 끝에 일괄
-            ST.Score.float(p.x, p.y - 34, '착!', { color: '#ffe27a', size: 26 });
+            ST.Score.float(p.x, p.y - 34, ST.I18N.t('float.stick'), { color: '#ffe27a', size: 26 });
             this.wasStuck = true;
             this._pendingStick = { impact: res, res: r, ts: this.ts };
             this._endThrow(true, true);
@@ -361,7 +369,7 @@ window.ST = window.ST || {};
           ST.Audio.play('pop');
           ST.Audio.play('sadDrop');
           ST.FX.burst(p.x, p.y, 8, { color: '#ccc', speed: 90, size: 4, life: 0.35 });
-          ST.Score.float(p.x, p.y - 40, '안 붙는 곳!', { color: '#c9c0e8', size: 24 });
+          ST.Score.float(p.x, p.y - 40, ST.I18N.t('float.noGrip'), { color: '#c9c0e8', size: 24 });
           this.fallAnim = { x: res.x, y: res.y, vx: res.vx * 0.15, vy: 0, rot: res.angle, rotV: (Math.random() - 0.5) * 8 };
           this.state = 'fall';
         } else {
@@ -377,7 +385,7 @@ window.ST = window.ST || {};
           ST.Audio.play('stingBad');
           ST.FX.addShake(6);
           ST.FX.burst(p.x, p.y, 10, { color: '#fff', speed: 120, size: 4, life: 0.35 });
-          ST.Score.float(p.x, p.y - 40, '너무 세다!', { color: '#ff9d76', size: 26 });
+          ST.Score.float(p.x, p.y - 40, ST.I18N.t('float.tooHard'), { color: '#ff9d76', size: 26 });
         }
       } else if (res.type === 'floor') {
         this.state = 'floorflop';
@@ -386,9 +394,9 @@ window.ST = window.ST || {};
         ST.Audio.play('thud');
         ST.Audio.play('sadDrop');
         ST.FX.burst(p.x, p.y, 8, { color: '#a89878', speed: 80, size: 4, life: 0.4 });
-        ST.Score.float(p.x, p.y - 30, '철퍼덕...', { color: '#c9b8a0', size: 24 });
+        ST.Score.float(p.x, p.y - 30, ST.I18N.t('float.floor'), { color: '#c9b8a0', size: 24 });
       } else { // past — 존 밖, 시각적으로 떨어짐
-        ST.Score.float(240, 300, '존 밖으로!', { color: '#9d92c7', size: 24 });
+        ST.Score.float(240, 300, ST.I18N.t('float.outZone'), { color: '#9d92c7', size: 24 });
         ST.Audio.play('sadDrop');
         this.fallAnim = {
           x: res.x, y: Math.max(res.y, 0.5), vx: res.vx * 0.2, vy: Math.min(0, res.vy * 0.2),
@@ -410,7 +418,7 @@ window.ST = window.ST || {};
     /* 파티 동시 시뮬 시작. list: [{player,name,color,impact,res,ts}] */
     startSimul(list) {
       ST.UI.showGame();
-      this.turnLabel = '동시 크롤 스타트!';
+      this.turnLabel = ST.I18N.t('turn.simul');
       this.turnColor = '#ffe27a';
       this.banner = { t: 1.2 };
       this.state = 'simul';
@@ -444,7 +452,7 @@ window.ST = window.ST || {};
       }
       const total = ST.Score.finalize(this.ts);
       if (total > 0) {
-        ST.Score.float(240, 360, '합계 +' + total.toLocaleString(), { color: '#ffe27a', size: 34, dur: 1.4 });
+        ST.Score.float(240, 360, ST.I18N.t('float.sum', total.toLocaleString()), { color: '#ffe27a', size: 34, dur: 1.4 });
       }
       this.state = 'done';
       this.endT = 0.9;
@@ -649,10 +657,10 @@ window.ST = window.ST || {};
         ctx.font = '700 17px "Malgun Gothic", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#fff';
-        ctx.fillText('찐득이를 잡고 벽으로 플릭! ☝', 240, 560);
+        ctx.fillText(ST.I18N.t('hint.flick'), 240, 560);
         ctx.font = '400 14px "Malgun Gothic", sans-serif';
         ctx.fillStyle = '#c9c0e8';
-        ctx.fillText('잡은 채로 빙글빙글 돌리면 커브볼', 240, 584);
+        ctx.fillText(ST.I18N.t('hint.spin'), 240, 584);
         ctx.globalAlpha = 1;
       }
 
@@ -695,47 +703,76 @@ window.ST = window.ST || {};
       ctx.fill();
     },
 
+    _chip(x, y, w, h, hi, color) {
+      ctx.fillStyle = hi ? 'rgba(30,24,58,0.85)' : 'rgba(18,14,36,0.6)';
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, h / 2);
+      ctx.fill();
+      if (hi) {
+        ctx.strokeStyle = color || '#ffe27a';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    },
+
     _drawHUD() {
       const s = ST.Modes.session;
       if (!s) return;
-      ctx.textAlign = 'left';
-      ctx.font = '700 16px "Malgun Gothic", sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      const p = s.players[s.cur];
-      ctx.fillText(this.turnLabel, 14, 28);
 
-      // 현재 던지기 점수
-      if (this.ts) {
-        const live = Math.round(this.ts.holdScore + this.ts.throwBonus);
+      // ── 1행: 좌 턴 라벨 칩 / 우 점수 칩 (상단 밴드 안, 벽과 분리)
+      ctx.font = '700 16px "Malgun Gothic", sans-serif';
+      const tw = ctx.measureText(this.turnLabel).width;
+      this._chip(10, 9, tw + 24, 30, false);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fillText(this.turnLabel, 22, 30);
+
+      if (this.ts || this.state === 'simul') {
+        let scoreTxt = '0';
+        if (this.ts) scoreTxt = Math.round(this.ts.holdScore + this.ts.throwBonus).toLocaleString();
+        ctx.font = '900 24px "Malgun Gothic", sans-serif';
+        const sw = Math.max(64, ctx.measureText(scoreTxt).width + 28);
+        this._chip(470 - sw, 9, sw, 32, false);
         ctx.textAlign = 'right';
-        ctx.font = '900 26px "Malgun Gothic", sans-serif';
         ctx.fillStyle = '#ffe27a';
-        ctx.fillText(live.toLocaleString(), 466, 34);
+        ctx.fillText(scoreTxt, 456, 34);
         if (this.state === 'stuck' && this.stuckSt) {
-          ctx.font = '700 17px "Malgun Gothic", sans-serif';
+          ctx.font = '700 15px "Malgun Gothic", sans-serif';
+          const ht = '⏱ ' + this.stuckSt.holdTime.toFixed(1) + 's ×' + this.curMult;
+          const hw = ctx.measureText(ht).width + 22;
+          this._chip(470 - hw, 45, hw, 26, false);
           ctx.fillStyle = '#8ad6ff';
-          ctx.fillText('⏱ ' + this.stuckSt.holdTime.toFixed(1) + 's  ×' + this.curMult, 466, 58);
+          ctx.fillText(ht, 459, 64);
         }
       }
 
-      // 세션 합계 (파티: 전원 / 연습: 나) — 시뮬 중엔 실시간 반영
-      ctx.textAlign = 'left';
-      ctx.font = '600 13px "Malgun Gothic", sans-serif';
-      let yy = 52;
+      // ── 2행: 플레이어 칩 가로 나열 (시뮬 중 실시간 합산)
+      ctx.font = '700 13px "Malgun Gothic", sans-serif';
+      let xx = 10;
+      let yy = 46;
       s.players.forEach((pl, i) => {
         let tot = pl.total;
-        let live = false;
+        let liveNow = false;
         if (this.state === 'simul' && this.multi) {
           const m = this.multi.find((mm) => mm.player === i);
           if (m) {
             tot += m.done ? (m.result || 0) : Math.round(m.ts.holdScore + m.ts.throwBonus);
-            live = !m.done;
+            liveNow = !m.done;
           }
         }
-        const cur = this.state === 'simul' ? live : i === s.cur;
-        ctx.fillStyle = cur ? '#fff' : 'rgba(255,255,255,0.55)';
-        ctx.fillText((cur ? '▶ ' : '   ') + pl.name + '  ' + tot.toLocaleString(), 14, yy);
-        yy += 19;
+        const hi = this.state === 'simul' ? liveNow : i === s.cur;
+        const label = pl.name + ' ' + tot.toLocaleString();
+        const w = ctx.measureText(label).width + 30;
+        if (xx + w > 470) { xx = 10; yy += 30; }
+        this._chip(xx, yy, w, 26, hi, pl.color);
+        ctx.beginPath();
+        ctx.fillStyle = pl.color;
+        ctx.arc(xx + 13, yy + 13, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = hi ? '#fff' : 'rgba(255,255,255,0.6)';
+        ctx.fillText(label, xx + 23, yy + 18);
+        xx += w + 8;
       });
     },
   };

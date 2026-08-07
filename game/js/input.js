@@ -28,6 +28,20 @@ window.ST = window.ST || {};
     enable() { enabled = true; },
     disable() { enabled = false; this._reset(); },
 
+    // 매 프레임: 스핀 동작을 멈추면 이펙트/스핀 자연 소멸 (커브볼 해제)
+    tick(dt) {
+      if (!holding) return;
+      if (performance.now() - (this._lastSpinAt || 0) > 160) {
+        const k = Math.exp(-dt * 5.5);
+        spinVel *= k;
+        spinAccum *= k;
+        if (Math.abs(spinAccum) < 0.4) spinAccum = 0;
+        if (Math.abs(spinVel) < 0.3) spinVel = 0;
+        this.spinCharge = spinAccum;
+        this.spinVel = spinVel;
+      }
+    },
+
     _reset() {
       holding = false; this.holding = false;
       samples.length = 0;
@@ -91,6 +105,7 @@ window.ST = window.ST || {};
               const prev = samples[samples.length - 2];
               const dt = prev ? (now - prev.t) / 1000 : 0.016;
               if (dt > 0) spinVel = spinVel * 0.75 + (d / dt) * 0.25;
+              if (Math.abs(d) > 0.03) this._lastSpinAt = now;
             }
           }
           lastAngle = a;

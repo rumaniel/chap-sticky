@@ -15,7 +15,7 @@ window.ST = window.ST || {};
       session = {
         mode: 'practice',
         shapeId, mapId,
-        players: [{ name: '나', color: PLAYER_COLORS[0], throws: [], total: 0, bestHold: 0 }],
+        players: [{ name: ST.I18N.t('player.me'), color: PLAYER_COLORS[0], throws: [], total: 0, bestHold: 0 }],
         throwsPer: throwsN || 5,
         cur: 0, round: 0,
         markers: [],
@@ -52,8 +52,8 @@ window.ST = window.ST || {};
       ST.Game.setup(session.shapeId, session.mapId);
       const p = this.curPlayer();
       const label = session.mode === 'party'
-        ? p.name + ' 차례! (' + this.throwNo() + '/' + session.throwsPer + '구)'
-        : this.throwNo() + '구 / ' + session.throwsPer + '구';
+        ? ST.I18N.t('turn.party', p.name, this.throwNo(), session.throwsPer)
+        : ST.I18N.t('turn.practice', this.throwNo(), session.throwsPer);
       ST.Game.startTurn(label, p.color);
       if (session.mode === 'party') ST.Audio.play('turn');
     },

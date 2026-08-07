@@ -8,7 +8,7 @@ window.ST = window.ST || {};
   const TUNE = {
     WALL_Z: 3.0,        // 벽까지 거리
     WALL_W: 3.2,        // 벽 폭 (m)
-    WALL_H: 3.0,        // 벽 높이 (m)
+    WALL_H: 2.73,       // 벽 높이 (m) — 상단 HUD 밴드 확보
     WALL_BOTTOM: 0.30,  // 벽 하단 y (m)
     CAM_H: 1.40,        // 카메라 높이
     FOCAL: 1.9,

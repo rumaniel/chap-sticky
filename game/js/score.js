@@ -58,11 +58,12 @@ window.ST = window.ST || {};
       if (Math.abs(impact.spin) > 6) {
         const b = Math.round(60 + Math.abs(impact.spin) * 6);
         ts.throwBonus += b;
-        ts.bonuses.push({ text: '커브 착! +' + b, color: '#8ad6ff' });
+        ts.curve = true;
+        ts.bonuses.push({ text: ST.I18N.t('float.curve', b), color: '#8ad6ff' });
       }
       if (res.perfect) {
         ts.throwBonus += 200;
-        ts.bonuses.push({ text: '퍼펙트 착!! +200', color: '#ffe27a' });
+        ts.bonuses.push({ text: ST.I18N.t('float.perfect', 200), color: '#ffe27a' });
       }
     },
 
@@ -77,7 +78,7 @@ window.ST = window.ST || {};
         if (Math.hypot(st.x - w.x, st.y - w.y) < w.r + ST.Sticky.TOY_R * 0.5) {
           ts.spotsHit.add(i);
           ts.throwBonus += sp.bonus;
-          ts.bonuses.push({ text: sp.icon + ' 스팟! +' + sp.bonus, color: '#ffb3f2', live: true });
+          ts.bonuses.push({ text: ST.I18N.t('float.spot', sp.icon, sp.bonus), color: '#ffb3f2', live: true });
           ST.Audio.play('spot');
         }
       });
