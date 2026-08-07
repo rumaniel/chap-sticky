@@ -1,0 +1,60 @@
+name: Deploy to itch.io
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-itch
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Push HTML5 build to itch.io
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup butler
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BUTLER_API_KEY:-}" ]; then
+            echo "::error::BUTLER_API_KEY secret is required."
+            exit 1
+          fi
+          curl -fsSL -o /tmp/butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          mkdir -p "$HOME/.butler"
+          unzip -oq /tmp/butler.zip -d "$HOME/.butler"
+          chmod +x "$HOME/.butler/butler"
+          echo "$HOME/.butler" >> "$GITHUB_PATH"
+
+      - name: Push to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          ITCH_USER: ${{ vars.ITCH_USER }}
+          ITCH_GAME: ${{ vars.ITCH_GAME }}
+          ITCH_CHANNEL: ${{ vars.ITCH_CHANNEL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ITCH_USER:-}" ] || [ -z "${ITCH_GAME:-}" ]; then
+            echo "::error::ITCH_USER and ITCH_GAME repository variables are required."
+            exit 1
+          fi
+          channel="${ITCH_CHANNEL:-html5}"
+          target="${ITCH_USER}/${ITCH_GAME}:${channel}"
+          version="1.0.${GITHUB_RUN_NUMBER}"
+          echo "Pushing game/ to ${target} (version ${version})"
+          butler push game "${target}" --userversion "${version}"
+
+      - name: Upload build artifact
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: sticky-toss-html5-${{ github.run_number }}
+          path: game
+          retention-days: 30
