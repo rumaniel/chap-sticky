@@ -1,0 +1,591 @@
+/* 찐득이 토스 - 메인 루프, 씬 렌더, 던지기 라이프사이클 */
+window.ST = window.ST || {};
+
+(function () {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  ST.canvas = canvas;
+  ST.ctx = ctx;
+  ST.view = { w: 480, h: 800, cx: 240, scale: 1 };
+
+  // ---------------- 뷰포트 (레터박스 contain) ----------------
+  function resize() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const scale = Math.min(vw / ST.view.w, vh / ST.view.h);
+    const cw = Math.round(ST.view.w * scale), chh = Math.round(ST.view.h * scale);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.style.width = cw + 'px';
+    canvas.style.height = chh + 'px';
+    canvas.width = Math.round(cw * dpr);
+    canvas.height = Math.round(chh * dpr);
+    ST.view.scale = scale * dpr;
+    const ov = document.getElementById('overlay');
+    ov.style.width = cw + 'px';
+    ov.style.height = chh + 'px';
+  }
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+
+  // ---------------- 게임 오브젝트 ----------------
+  const REST = { x: 240, y: 672 };
+
+  const Game = {
+    state: 'idle',
+    shape: null, map: null,
+    wallCache: null, wallRect: null,
+    toyScreen: { x: REST.x, y: REST.y },
+    flight: null, stuckSt: null, fallAnim: null, bounceAnim: null, flopAnim: null,
+    ts: null,               // 현재 던지기 점수 상태
+    impactPos: null,
+    banner: null, turnLabel: '', turnColor: '#fff',
+    hintT: 0, endT: 0, curMult: 0,
+    time: 0,
+
+    setup(shapeId, mapId) {
+      this.shape = ST.Shapes.get(shapeId);
+      this.map = ST.Materials.get(mapId);
+      this.buildWallCache();
+      this.state = 'idle';
+      this.toyScreen = { x: REST.x, y: REST.y };
+      this.flight = this.stuckSt = this.fallAnim = this.bounceAnim = this.flopAnim = null;
+      this.impactPos = null;
+      ST.FX.clear();
+      ST.Score.clearFloaters();
+    },
+
+    buildWallCache() {
+      const r = ST.Physics.wallRect();
+      this.wallRect = r;
+      const Q = 2;
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(r.w * Q);
+      cv.height = Math.round(r.h * Q);
+      const c = cv.getContext('2d');
+      this.map.drawWall(c, cv.width, cv.height);
+
+      // 과녁 링 (밴드)
+      const T = ST.Physics.TUNE;
+      const rw = ST.Score.ringWorld(this.map);
+      const toPx = (wx, wy) => ({
+        x: ((wx + T.WALL_W / 2) / T.WALL_W) * cv.width,
+        y: ((T.WALL_BOTTOM + T.WALL_H - wy) / T.WALL_H) * cv.height,
+      });
+      const cpx = toPx(rw.x, rw.y);
+      const wpm = cv.width / T.WALL_W;
+      const R = this.map.rings;
+      for (let i = R.radii.length - 1; i >= 0; i--) {
+        c.beginPath();
+        c.fillStyle = i % 2 === 0 ? 'rgba(232,86,86,0.82)' : 'rgba(250,246,238,0.82)';
+        c.arc(cpx.x, cpx.y, R.radii[i] * rw.unit * wpm, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.beginPath();
+      c.fillStyle = 'rgba(255,226,122,0.95)';
+      c.arc(cpx.x, cpx.y, R.radii[0] * rw.unit * wpm * 0.35, 0, Math.PI * 2);
+      c.fill();
+      // 배율 라벨
+      c.font = '700 ' + Math.round(cv.width * 0.035) + 'px sans-serif';
+      c.textAlign = 'center';
+      c.fillStyle = 'rgba(60,30,30,0.85)';
+      R.radii.forEach((rr, i) => {
+        c.fillText('×' + R.mults[i], cpx.x, cpx.y - rr * rw.unit * wpm + cv.width * 0.032);
+      });
+
+      // 보너스 스팟
+      this.map.spots.forEach((sp) => {
+        const w = ST.Score.spotWorld(this.map, sp);
+        const p = toPx(w.x, w.y);
+        const rad = w.r * wpm;
+        c.beginPath();
+        c.fillStyle = 'rgba(186,120,255,0.28)';
+        c.arc(p.x, p.y, rad, 0, Math.PI * 2);
+        c.fill();
+        c.setLineDash([6, 5]);
+        c.strokeStyle = 'rgba(255,255,255,0.85)';
+        c.lineWidth = 3;
+        c.stroke();
+        c.setLineDash([]);
+        c.font = '700 ' + Math.round(rad * 0.8) + 'px sans-serif';
+        c.fillStyle = 'rgba(255,255,255,0.95)';
+        c.fillText(sp.icon, p.x, p.y + rad * 0.28);
+        c.font = '700 ' + Math.round(rad * 0.5) + 'px sans-serif';
+        c.fillText('+' + sp.bonus, p.x, p.y + rad + 14);
+      });
+
+      this.wallCache = cv;
+    },
+
+    startTurn(label, color) {
+      this.turnLabel = label;
+      this.turnColor = color || '#fff';
+      this.banner = { t: 1.2 };
+      this.state = 'aim';
+      this.ts = ST.Score.beginThrow();
+      this.toyScreen = { x: REST.x, y: REST.y };
+      this.flight = this.stuckSt = this.fallAnim = this.bounceAnim = this.flopAnim = null;
+      this.impactPos = null;
+      this.curMult = 0;
+      const s = ST.Modes.session;
+      this.hintT = s && s.round === 0 && s.cur === 0 ? 6 : 0;
+      ST.Input.enable();
+    },
+
+    // ---------- 입력 콜백 ----------
+    bindInput() {
+      const I = ST.Input;
+      I.grabTest = (x, y) => this.state === 'aim' &&
+        Math.hypot(x - this.toyScreen.x, y - this.toyScreen.y) < 115;
+      I.onGrab = () => { ST.Audio.play('grab'); };
+      I.onHoldMove = (p) => {
+        this.toyScreen.x = Math.max(35, Math.min(445, p.x));
+        this.toyScreen.y = Math.max(330, Math.min(775, p.y));
+        if (Math.abs(I.spinVel) > 9 && Math.random() < 0.25) ST.Audio.play('spin');
+      };
+      I.onCancel = () => { /* 제자리 복귀는 update에서 lerp */ };
+      I.onThrow = (flick, spin) => {
+        if (this.state !== 'aim') return;
+        const T = ST.Physics.TUNE;
+        const hw = ST.Physics.unproject(this.toyScreen.x, this.toyScreen.y, T.HOLD_Z);
+        this.flight = ST.Physics.makeThrow(flick, spin.vel, hw);
+        this.state = 'fly';
+        this.hintT = 0;
+        ST.Audio.play('whoosh');
+        ST.Input.disable();
+      };
+    },
+
+    // ---------- 갱신 ----------
+    update(dt) {
+      this.time += dt;
+      if (this.banner) { this.banner.t -= dt; if (this.banner.t <= 0) this.banner = null; }
+      if (this.hintT > 0) this.hintT -= dt;
+
+      const T = ST.Physics.TUNE;
+
+      if (this.state === 'aim' && !ST.Input.holding) {
+        // 제자리 복귀
+        this.toyScreen.x += (REST.x - this.toyScreen.x) * Math.min(1, dt * 10);
+        this.toyScreen.y += (REST.y - this.toyScreen.y) * Math.min(1, dt * 10);
+      }
+
+      if (this.state === 'fly') {
+        const f = this.flight;
+        const res = ST.Physics.stepFlight(f, dt);
+        // 스핀 트레일
+        if (Math.abs(f.spin) > 5 && Math.random() < 0.6) {
+          const pr = ST.Physics.project(f.x, f.y, f.z);
+          ST.FX.burst(pr.x, pr.y, 1, { speed: 30, size: 4, life: 0.35, grav: 0, color: '#8ad6ff' });
+        }
+        if (res) this._onFlightEnd(res);
+      } else if (this.state === 'stuck') {
+        const st = this.stuckSt;
+        const evs = ST.Sticky.update(st, dt);
+        this.curMult = ST.Score.tickHold(this.ts, st, dt);
+        for (const e of evs) {
+          if (e === 'flip') ST.Audio.play('flip');
+          else if (e === 'land') { ST.Audio.play('land'); ST.FX.addShake(2); this._dustAt(st, 4); }
+          else if (e === 'slip') ST.Audio.play('slip');
+          else if (e === 'fall') this._startFall();
+        }
+        // 초당 점수 틱 표시
+        this._tickAcc = (this._tickAcc || 0) + dt;
+        if (this._tickAcc >= 1) {
+          this._tickAcc -= 1;
+          const p = ST.Physics.project(st.x, st.y, T.WALL_Z);
+          ST.Score.float(p.x, p.y - 46, '+' + Math.round(ST.Score.HOLD_RATE * this.curMult), { color: '#c7f77a', size: 18, dur: 0.8 });
+          ST.Audio.play('tick');
+        }
+      } else if (this.state === 'fall') {
+        const fa = this.fallAnim;
+        fa.vy -= 9.8 * dt;
+        fa.y += fa.vy * dt;
+        fa.x += fa.vx * dt;
+        fa.rot += fa.rotV * dt;
+        if (fa.y <= 0.12) {
+          ST.Audio.play('thud');
+          ST.FX.addShake(4);
+          const p = ST.Physics.project(fa.x, 0.1, T.WALL_Z);
+          ST.FX.burst(p.x, p.y, 10, { color: '#bbb', speed: 90, size: 4, life: 0.5 });
+          this._endThrow(true);
+        }
+      } else if (this.state === 'bounceoff') {
+        const b = this.bounceAnim;
+        b.vy -= 9.8 * dt;
+        b.y += b.vy * dt;
+        b.z += b.vz * dt;
+        b.x += b.vx * dt;
+        b.rot += b.rotV * dt;
+        if (b.y <= 0.1 || b.z < 0.3) {
+          ST.Audio.play('thud');
+          this._endThrow(false);
+        }
+      } else if (this.state === 'floorflop') {
+        this.flopAnim.t += dt;
+        if (this.flopAnim.t > 0.8) this._endThrow(false);
+      } else if (this.state === 'done') {
+        this.endT -= dt;
+        if (this.endT <= 0 && this._doneRes) {
+          const r = this._doneRes;
+          this._doneRes = null;
+          ST.Modes.onThrowEnd(r);
+        }
+      }
+    },
+
+    _onFlightEnd(res) {
+      const T = ST.Physics.TUNE;
+      if (res.type === 'wall') {
+        const shape = this.shape, map = this.map;
+        const r = ST.Sticky.resolveImpact(res, shape, map);
+        const p = ST.Physics.project(res.x, res.y, T.WALL_Z);
+        if (r.stuck) {
+          this.stuckSt = ST.Sticky.createStuck(r, res, shape, map);
+          this.impactPos = { x: res.x, y: res.y };
+          ST.Score.onStick(this.ts, r, res, map);
+          this.state = 'stuck';
+          ST.Audio.play('splat');
+          if (r.perfect) ST.Audio.play('perfect');
+          ST.FX.addShake(r.perfect ? 8 : 5);
+          ST.FX.addHitstop(0.07);
+          ST.FX.burst(p.x, p.y, 14, { color: shape.light, speed: 150, size: 5, life: 0.45 });
+          // 보너스 플로터
+          this.ts.bonuses.forEach((b, i) => {
+            if (!b.live) setTimeout(() => ST.Score.float(p.x, p.y - 60 - i * 26, b.text, { color: b.color, size: 24 }), 150 + i * 220);
+          });
+        } else {
+          // 튕겨나감
+          this.state = 'bounceoff';
+          this.bounceAnim = {
+            x: res.x, y: res.y, z: T.WALL_Z,
+            vx: res.vx * 0.25, vy: Math.max(0.8, res.vy * 0.3),
+            vz: -res.vz * map.mat.bounce * 0.4,
+            rot: res.angle, rotV: (Math.random() - 0.5) * 14,
+          };
+          ST.Audio.play('bounce');
+          ST.FX.addShake(6);
+          ST.FX.burst(p.x, p.y, 10, { color: '#fff', speed: 120, size: 4, life: 0.35 });
+          ST.Score.float(p.x, p.y - 40, '너무 세다!', { color: '#ff9d76', size: 26 });
+        }
+      } else if (res.type === 'floor') {
+        this.state = 'floorflop';
+        this.flopAnim = { x: res.x, z: res.z, t: 0 };
+        const p = ST.Physics.project(res.x, 0.05, res.z);
+        ST.Audio.play('thud');
+        ST.FX.burst(p.x, p.y, 8, { color: '#a89878', speed: 80, size: 4, life: 0.4 });
+        ST.Score.float(p.x, p.y - 30, '철퍼덕...', { color: '#c9b8a0', size: 24 });
+      } else { // past
+        ST.Score.float(240, 300, '벽 밖으로...!', { color: '#9d92c7', size: 26 });
+        this._endThrow(false);
+      }
+    },
+
+    _startFall() {
+      const st = this.stuckSt;
+      ST.Audio.play('peel');
+      ST.Audio.play('fallWhistle');
+      this.fallAnim = {
+        x: st.x, y: st.y, vx: st.driftX * 20, vy: 0.3,
+        rot: st.angle, rotV: (st.flipDir || 1) * 6,
+      };
+      this.state = 'fall';
+    },
+
+    _dustAt(st, n) {
+      const p = ST.Physics.project(st.x, st.y, ST.Physics.TUNE.WALL_Z);
+      ST.FX.burst(p.x, p.y + 12, n, { color: '#ffffff88', speed: 50, size: 3, life: 0.3, grav: 60 });
+    },
+
+    _endThrow(wasStuck) {
+      const total = ST.Score.finalize(this.ts);
+      if (total > 0) {
+        ST.Score.float(240, 360, '합계 +' + total.toLocaleString(), { color: '#ffe27a', size: 34, dur: 1.4 });
+      }
+      this.state = 'done';
+      this.endT = 0.9;
+      this._doneRes = {
+        total,
+        holdTime: this.ts.holdTime || 0,
+        impact: this.impactPos,
+        stuck: !!wasStuck,
+      };
+    },
+
+    // ---------- 렌더 ----------
+    render() {
+      const T = ST.Physics.TUNE;
+      const v = ST.view;
+      ctx.save();
+      ctx.setTransform(v.scale, 0, 0, v.scale, 0, 0);
+      ctx.translate(ST.FX.shakeX, ST.FX.shakeY);
+
+      // 배경
+      const bg = ctx.createLinearGradient(0, 0, 0, v.h);
+      bg.addColorStop(0, this.map ? this.map.skyColor : '#3a2f5c');
+      bg.addColorStop(1, '#1a1530');
+      ctx.fillStyle = bg;
+      ctx.fillRect(-20, -20, v.w + 40, v.h + 40);
+
+      if (this.map) {
+        const r = this.wallRect;
+        // 벽
+        ctx.drawImage(this.wallCache, r.x, r.y, r.w, r.h);
+        // 벽 테두리
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+        // 바닥 (원근 사다리꼴)
+        const fb = this.map.floorColor;
+        const fg = ctx.createLinearGradient(0, r.y + r.h, 0, v.h);
+        fg.addColorStop(0, fb[0]); fg.addColorStop(1, fb[1]);
+        ctx.fillStyle = fg;
+        ctx.beginPath();
+        ctx.moveTo(r.x, r.y + r.h);
+        ctx.lineTo(r.x + r.w, r.y + r.h);
+        ctx.lineTo(v.w + 60, v.h);
+        ctx.lineTo(-60, v.h);
+        ctx.closePath();
+        ctx.fill();
+        // 바닥 원근선
+        ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+        ctx.lineWidth = 2;
+        for (let i = 1; i < 6; i++) {
+          const k = i / 6;
+          const y = r.y + r.h + (v.h - r.y - r.h) * k * k;
+          const spread = 60 * k * k;
+          ctx.beginPath();
+          ctx.moveTo(r.x - spread, y);
+          ctx.lineTo(r.x + r.w + spread, y);
+          ctx.stroke();
+        }
+
+        // 이전 던지기 마커
+        const s = ST.Modes.session;
+        if (s) {
+          for (const m of s.markers) {
+            const p = ST.Physics.project(m.x, m.y, T.WALL_Z);
+            ctx.beginPath();
+            ctx.fillStyle = m.color;
+            ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.font = '700 10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(m.label, p.x, p.y + 3.5);
+          }
+        }
+      }
+
+      // ---- 찐득이 ----
+      if (this.state === 'stuck' && this.stuckSt) {
+        const st = this.stuckSt;
+        const p = ST.Physics.project(st.x, st.y, T.WALL_Z);
+        const S = ST.Sticky.TOY_R * T.PPM * p.s * (this.shape.radius + 0.15);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(st.angle);
+        this.shape.draw(ctx, S, { wob: st.wob, t: this.time, squash: st.squash, mood: st.mood, contacts: st.contacts });
+        ctx.restore();
+        // 그립 게이지
+        this._drawGrip(p.x, p.y - S - 16, st.gh);
+      } else if (this.state === 'fall' && this.fallAnim) {
+        const fa = this.fallAnim;
+        const p = ST.Physics.project(fa.x, fa.y, T.WALL_Z);
+        const S = ST.Sticky.TOY_R * T.PPM * p.s * 1.1;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(fa.rot);
+        this.shape.draw(ctx, S, { wob: 1, t: this.time, mood: 'dizzy' });
+        ctx.restore();
+      } else if (this.state === 'bounceoff' && this.bounceAnim) {
+        const b = this.bounceAnim;
+        const p = ST.Physics.project(b.x, b.y, b.z);
+        const S = ST.Sticky.TOY_R * T.PPM * p.s * 1.1;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(b.rot);
+        this.shape.draw(ctx, S, { wob: 1, t: this.time, mood: 'dizzy' });
+        ctx.restore();
+      } else if (this.state === 'floorflop' && this.flopAnim) {
+        const f = this.flopAnim;
+        const p = ST.Physics.project(f.x, 0.06, f.z);
+        const S = ST.Sticky.TOY_R * T.PPM * p.s;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        this.shape.draw(ctx, S, { squash: 0.45, mood: 'dizzy', t: this.time });
+        ctx.restore();
+      } else if (this.state === 'fly' && this.flight) {
+        const f = this.flight;
+        const p = ST.Physics.project(f.x, f.y, f.z);
+        const S = ST.Sticky.TOY_R * T.PPM * p.s * 1.15;
+        // 그림자
+        const sh = ST.Physics.project(f.x, 0.02, f.z);
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        ctx.ellipse(sh.x, sh.y, S * 0.7, S * 0.22, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(f.angle);
+        this.shape.draw(ctx, S, { wob: 0.3, t: this.time, mood: 'excited' });
+        ctx.restore();
+      } else if (this.state === 'aim' || this.state === 'idle' || this.state === 'done') {
+        if (this.shape && this.state !== 'done') {
+          const t = this.toyScreen;
+          const S = ST.Sticky.TOY_R * T.PPM * 0.82;
+          // 그림자
+          ctx.beginPath();
+          ctx.fillStyle = 'rgba(0,0,0,0.28)';
+          ctx.ellipse(REST.x, REST.y + 66, 52, 13, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.save();
+          ctx.translate(t.x, t.y + (ST.Input.holding ? 0 : Math.sin(this.time * 2.2) * 4));
+          const spinRot = ST.Input.holding ? ST.Input.spinCharge * 0.6 : 0;
+          ctx.rotate(spinRot);
+          this.shape.draw(ctx, S, { wob: ST.Input.holding ? 0.35 : 0.12, t: this.time, mood: 'happy' });
+          ctx.restore();
+          // 스핀 인디케이터
+          if (ST.Input.holding && Math.abs(ST.Input.spinCharge) > 2.5) {
+            ctx.strokeStyle = '#8ad6ff';
+            ctx.lineWidth = 4;
+            const dir = Math.sign(ST.Input.spinCharge);
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, S + 18, this.time * 4 * dir, this.time * 4 * dir + 1.5);
+            ctx.stroke();
+            ctx.font = '900 20px "Malgun Gothic", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#8ad6ff';
+            ctx.fillText('커브!', t.x, t.y - S - 26);
+          }
+        }
+      }
+
+      // 조작 힌트
+      if (this.hintT > 0 && this.state === 'aim') {
+        ctx.globalAlpha = Math.min(1, this.hintT);
+        ctx.font = '700 17px "Malgun Gothic", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#fff';
+        ctx.fillText('찐득이를 잡고 벽으로 플릭! ☝', 240, 560);
+        ctx.font = '400 14px "Malgun Gothic", sans-serif';
+        ctx.fillStyle = '#c9c0e8';
+        ctx.fillText('잡은 채로 빙글빙글 돌리면 커브볼', 240, 584);
+        ctx.globalAlpha = 1;
+      }
+
+      // HUD
+      this._drawHUD();
+
+      // 배너
+      if (this.banner) {
+        const a = Math.min(1, this.banner.t / 0.3);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = 'rgba(20,15,40,0.82)';
+        ctx.beginPath();
+        ctx.roundRect(70, 300, 340, 84, 20);
+        ctx.fill();
+        ctx.strokeStyle = this.turnColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.font = '900 30px "Malgun Gothic", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = this.turnColor;
+        ctx.fillText(this.turnLabel, 240, 352);
+        ctx.globalAlpha = 1;
+      }
+
+      ST.FX.draw(ctx);
+      ST.Score.drawFloaters(ctx);
+      ctx.restore();
+    },
+
+    _drawGrip(x, y, gh) {
+      const w = 64, h = 9;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.beginPath();
+      ctx.roundRect(x - w / 2 - 2, y - 2, w + 4, h + 4, 5);
+      ctx.fill();
+      const g = Math.max(0, Math.min(1, gh));
+      ctx.fillStyle = g > 0.5 ? '#7ed957' : g > 0.25 ? '#ffd94f' : '#ff8a8a';
+      ctx.beginPath();
+      ctx.roundRect(x - w / 2, y, w * g, h, 4);
+      ctx.fill();
+    },
+
+    _drawHUD() {
+      const s = ST.Modes.session;
+      if (!s) return;
+      ctx.textAlign = 'left';
+      ctx.font = '700 16px "Malgun Gothic", sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      const p = s.players[s.cur];
+      ctx.fillText(this.turnLabel, 14, 28);
+
+      // 현재 던지기 점수
+      if (this.ts) {
+        const live = Math.round(this.ts.holdScore + this.ts.throwBonus);
+        ctx.textAlign = 'right';
+        ctx.font = '900 26px "Malgun Gothic", sans-serif';
+        ctx.fillStyle = '#ffe27a';
+        ctx.fillText(live.toLocaleString(), 466, 34);
+        if (this.state === 'stuck' && this.stuckSt) {
+          ctx.font = '700 17px "Malgun Gothic", sans-serif';
+          ctx.fillStyle = '#8ad6ff';
+          ctx.fillText('⏱ ' + this.stuckSt.holdTime.toFixed(1) + 's  ×' + this.curMult, 466, 58);
+        }
+      }
+
+      // 세션 합계 (파티: 전원 / 연습: 나)
+      ctx.textAlign = 'left';
+      ctx.font = '600 13px "Malgun Gothic", sans-serif';
+      let yy = 52;
+      s.players.forEach((pl, i) => {
+        ctx.fillStyle = i === s.cur ? '#fff' : 'rgba(255,255,255,0.55)';
+        ctx.fillText((i === s.cur ? '▶ ' : '   ') + pl.name + '  ' + pl.total.toLocaleString(), 14, yy);
+        yy += 19;
+      });
+    },
+  };
+
+  ST.Game = Game;
+
+  // ---------------- 메인 루프 ----------------
+  let last = performance.now();
+  let lastW = 0, lastH = 0;
+  function loop(now) {
+    requestAnimationFrame(loop);
+    // 뷰포트 변화 감지 (iframe/pane 표시 지연, itch.io 임베드 대응)
+    if (window.innerWidth !== lastW || window.innerHeight !== lastH) {
+      lastW = window.innerWidth; lastH = window.innerHeight;
+      if (lastW > 0 && lastH > 0) resize();
+    }
+    let dt = (now - last) / 1000;
+    last = now;
+    if (dt > 0.1) dt = 0.1;
+
+    if (ST.FX.hitstop > 0) {
+      ST.FX.hitstop -= dt;
+    } else {
+      Game.update(dt);
+      ST.FX.update(dt);
+      ST.Score.updateFloaters(dt);
+    }
+    Game.render();
+  }
+
+  // ---------------- 부트 ----------------
+  function boot() {
+    resize();
+    ST.Input.init(canvas);
+    Game.bindInput();
+    Game.setup('man', 'room'); // 타이틀 뒤 배경 씬
+    ST.UI.init();
+    requestAnimationFrame((t) => { last = t; requestAnimationFrame(loop); });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();

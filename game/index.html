@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="찐득이를 벽에 던져 붙이고 버텨라! 추억의 찐득이 장난감 물리 미니게임">
+<title>찐득이 토스 - Sticky Toss</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🫠</text></svg>">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #1a1530;
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    touch-action: none;
+    user-select: none; -webkit-user-select: none;
+    overscroll-behavior: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #game { display: block; background: #2a2145; }
+
+  /* ---------- overlay UI ---------- */
+  #overlay {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: none; align-items: center; justify-content: center;
+    color: #fff; z-index: 10;
+  }
+  #overlay.show { display: flex; }
+  .screen {
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    width: 100%; height: 100%; padding: 24px; gap: 14px; text-align: center;
+    background: linear-gradient(180deg, rgba(26,21,48,.92), rgba(42,33,69,.95));
+    overflow-y: auto;
+  }
+  .screen.show { display: flex; }
+
+  .logo {
+    font-size: 52px; font-weight: 900; line-height: 1.1;
+    background: linear-gradient(180deg, #aef15d, #4fc94f 60%, #2f9e44);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 4px 0 rgba(0,0,0,.35));
+    letter-spacing: -2px;
+  }
+  .logo-sub { font-size: 15px; color: #b9aee0; margin-top: -6px; letter-spacing: 4px; }
+  .tagline { font-size: 14px; color: #d7cff2; }
+
+  .btn {
+    font-family: inherit; font-size: 20px; font-weight: 800; color: #23331a;
+    background: linear-gradient(180deg, #c7f77a, #7ed957);
+    border: none; border-radius: 18px; padding: 14px 38px; cursor: pointer;
+    box-shadow: 0 5px 0 #3f8f3f, 0 8px 14px rgba(0,0,0,.35);
+    transition: transform .06s, box-shadow .06s;
+    min-width: 230px;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #3f8f3f; }
+  .btn.sub { background: linear-gradient(180deg, #e6ddff, #b9a5f5); box-shadow: 0 5px 0 #6d51c4, 0 8px 14px rgba(0,0,0,.35); color: #2d2255; font-size: 17px; }
+  .btn.sub:active { box-shadow: 0 1px 0 #6d51c4; }
+  .btn.mini { min-width: 0; font-size: 15px; padding: 9px 18px; border-radius: 12px; }
+  .btn:disabled { filter: grayscale(.8) brightness(.7); cursor: default; }
+
+  h2.title { font-size: 26px; font-weight: 900; color: #ffe27a; text-shadow: 0 3px 0 rgba(0,0,0,.4); }
+  .hint { font-size: 13px; color: #9d92c7; line-height: 1.6; }
+
+  /* stepper */
+  .stepper { display: flex; align-items: center; gap: 18px; }
+  .stepper button {
+    font-size: 26px; font-weight: 900; width: 54px; height: 54px; border-radius: 50%;
+    border: none; background: #7ed957; color: #23331a; cursor: pointer;
+    box-shadow: 0 4px 0 #3f8f3f;
+  }
+  .stepper button:active { transform: translateY(3px); box-shadow: 0 1px 0 #3f8f3f; }
+  .stepper .num { font-size: 44px; font-weight: 900; min-width: 80px; color: #fff; }
+
+  /* select cards */
+  .cards { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 460px; }
+  .card {
+    width: 104px; padding: 10px 6px; border-radius: 16px; cursor: pointer;
+    background: rgba(255,255,255,.08); border: 3px solid transparent;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .card.sel { border-color: #ffe27a; background: rgba(255,226,122,.14); }
+  .card.lock { opacity: .45; }
+  .card canvas { width: 72px; height: 72px; }
+  .card .nm { font-size: 13px; font-weight: 700; }
+  .card .desc { font-size: 10px; color: #b9aee0; line-height: 1.3; }
+
+  /* result table */
+  .rtable { border-collapse: collapse; min-width: 300px; }
+  .rtable td, .rtable th { padding: 6px 12px; font-size: 15px; }
+  .rtable th { color: #ffe27a; border-bottom: 2px solid rgba(255,255,255,.2); }
+  .rtable td { border-bottom: 1px solid rgba(255,255,255,.1); }
+  .rtable .me { color: #aef15d; font-weight: 800; }
+  .bigscore { font-size: 42px; font-weight: 900; color: #ffe27a; text-shadow: 0 3px 0 rgba(0,0,0,.4); }
+
+  input.name {
+    font-family: inherit; font-size: 22px; font-weight: 800; text-align: center;
+    width: 200px; padding: 10px; border-radius: 14px; border: 3px solid #7ed957;
+    background: rgba(255,255,255,.95); color: #23331a; outline: none;
+  }
+  .row { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
+
+  #sndToggle {
+    position: absolute; top: 10px; right: 10px; z-index: 20;
+    font-size: 20px; width: 44px; height: 44px; border-radius: 50%;
+    border: none; background: rgba(255,255,255,.15); color: #fff; cursor: pointer;
+    display: none;
+  }
+  #sndToggle.show { display: block; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+  <div id="overlay">
+    <!-- 타이틀 -->
+    <div class="screen" id="scr-title">
+      <div class="logo">찐득이<br>토스!</div>
+      <div class="logo-sub">STICKY TOSS</div>
+      <canvas id="titleToy" width="140" height="140"></canvas>
+      <div class="tagline">벽에 던져라, 붙어라, 버텨라!</div>
+      <button class="btn" id="btnStart">시작하기</button>
+      <button class="btn sub" id="btnBoard">🏆 리더보드</button>
+      <div class="hint">추억의 찐득이 장난감을 진짜 물리로!<br>드래그로 던지고, 빙글빙글 돌려 커브볼도 가능</div>
+    </div>
+
+    <!-- 모드 선택 -->
+    <div class="screen" id="scr-mode">
+      <h2 class="title">모드 선택</h2>
+      <button class="btn" id="btnPractice">🎯 연습 모드<br><span style="font-size:13px;font-weight:400">혼자서 최고 기록에 도전 (5구)</span></button>
+      <button class="btn" id="btnParty">🎉 파티 모드<br><span style="font-size:13px;font-weight:400">친구들과 번갈아 던지기 (각 3구)</span></button>
+      <button class="btn sub mini" id="btnModeBack">← 뒤로</button>
+    </div>
+
+    <!-- 파티 인원 -->
+    <div class="screen" id="scr-party">
+      <h2 class="title">몇 명이서 할까?</h2>
+      <div class="stepper">
+        <button id="pMinus">−</button>
+        <div class="num" id="pCount">2</div>
+        <button id="pPlus">+</button>
+      </div>
+      <div class="hint">한 기기로 번갈아 던집니다 (2~8명)</div>
+      <button class="btn" id="btnPartyGo">다음 →</button>
+      <button class="btn sub mini" id="btnPartyBack">← 뒤로</button>
+    </div>
+
+    <!-- 찐득이/맵 선택 -->
+    <div class="screen" id="scr-select">
+      <h2 class="title">찐득이 선택</h2>
+      <div class="cards" id="shapeCards"></div>
+      <h2 class="title" style="margin-top:8px">맵 선택</h2>
+      <div class="cards" id="mapCards"></div>
+      <button class="btn" id="btnPlay">던지러 가기!</button>
+      <button class="btn sub mini" id="btnSelBack">← 뒤로</button>
+    </div>
+
+    <!-- 결과 -->
+    <div class="screen" id="scr-result">
+      <h2 class="title" id="resTitle">라운드 결과</h2>
+      <div class="bigscore" id="resScore"></div>
+      <div class="hint" id="resSub"></div>
+      <div id="resTableWrap"></div>
+      <div class="row" id="nameEntry" style="display:none">
+        <input class="name" id="nameInput" maxlength="8" placeholder="이름 입력">
+        <button class="btn mini" id="btnSaveScore">기록 저장</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnRetry">🔄 한판 더</button>
+        <button class="btn sub" id="btnResMenu">메뉴로</button>
+      </div>
+    </div>
+
+    <!-- 리더보드 -->
+    <div class="screen" id="scr-board">
+      <h2 class="title">🏆 리더보드</h2>
+      <div id="boardWrap"></div>
+      <button class="btn sub mini" id="btnBoardBack">← 뒤로</button>
+    </div>
+  </div>
+  <button id="sndToggle">🔊</button>
+</div>
+
+<script src="js/shapes.js"></script>
+<script src="js/materials.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/score.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/input.js"></script>
+<script src="js/sticky.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/modes.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
