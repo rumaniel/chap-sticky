@@ -567,7 +567,7 @@ window.ST = window.ST || {};
           ctx.strokeText(m.name, p.x, p.y - S - 16);
           ctx.fillStyle = m.color;
           ctx.fillText(m.name, p.x, p.y - S - 16);
-          if (!m.fall) this._drawGrip(p.x, p.y - S - 34, m.st.gh);
+          if (!m.fall) this._drawGrip(p.x, p.y - S - 46, m.st.gh);
         }
       }
 

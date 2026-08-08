@@ -130,18 +130,19 @@ window.ST = window.ST || {};
         contacts: new Set(),
         pads: [],
       };
-      // 주스: 던지기 품질이 좋을수록 오래 산다
-      st.juiceMax = V2.JUICE0 + V2.JUICE_Q * res.gh;
+      // 주스: 던지기 품질이 좋을수록 오래 산다 (개체 랜덤 ±7%)
+      st.juiceMax = (V2.JUICE0 + V2.JUICE_Q * res.gh) * (0.93 + Math.random() * 0.14);
       st.juice = st.juiceMax;
       st.gh = 1;
 
       // 패드 초기화: 접촉 패드만 부착, HP = 품질 × 그 위치 머테리얼
+      // 패드별 랜덤 지터 ±18% — 같은 각도로 붙어도 매번 다른 크롤 전개
       shape.stickyPoints.forEach((p) => {
         const w = pointWorld(st, p);
         const m = ST.Materials.materialAt(map, w.x, w.y);
         const stuck = res.contacts.has(p.id) && !!m;
-        // 패드 grip은 부착 판정에서 이미 반영 — HP는 모형 간 정규화(decayMod가 개성 담당)
-        const hp = stuck ? Math.min(1.2, (0.55 + 0.7 * res.gh) * m.grip) : 0;
+        const jitter = 0.82 + Math.random() * 0.36;
+        const hp = stuck ? Math.min(1.2, (0.55 + 0.7 * res.gh) * m.grip * jitter) : 0;
         st.pads.push({ id: p.id, def: p, stuck, hp, hp0: Math.max(0.001, hp) });
         if (stuck) st.contacts.add(p.id);
       });
@@ -299,7 +300,8 @@ window.ST = window.ST || {};
       const R = st.roll;
       const T = ST.Physics.TUNE;
       // 역진자: 기울수록 가속 (π/2 이후는 관성 유지)
-      const acc = (9.8 / V2.ROLL_L) * Math.sin(Math.min(R.phi + V2.ROLL_NUDGE, Math.PI / 2));
+      if (R.nudge == null) R.nudge = V2.ROLL_NUDGE * (0.7 + Math.random() * 0.7);
+      const acc = (9.8 / V2.ROLL_L) * Math.sin(Math.min(R.phi + R.nudge, Math.PI / 2));
       R.vel += acc * dt;
       let d = Math.min(0.3, R.vel * dt); // 프레임당 회전 상한(안정성)
       R.phi += d;
