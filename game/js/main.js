@@ -224,6 +224,10 @@ window.ST = window.ST || {};
         // 게이지 직구↔커브 모드 크로스페이드
         const sbTgt = ST.Input.holding && this._spinActive() ? 1 : 0;
         this._spinBlend = (this._spinBlend || 0) + (sbTgt - (this._spinBlend || 0)) * Math.min(1, dt * 9);
+        // 셰브런 흐름 속도 = 스핀 각속도 연동. 위상 적분이라 속도 변화가 점프 없이 가감속으로만 반영
+        const chevTgt = 26 + 130 * Math.min(1, Math.abs(ST.Input.spinVel) * T.KSPIN / T.SPIN_MAX);
+        this._chevSpd = (this._chevSpd || 26) + (chevTgt - (this._chevSpd || 26)) * Math.min(1, dt * 5);
+        this._chevPhase = ((this._chevPhase || 0) + dt * this._chevSpd) % 34;
         if (ST.Input.holding) {
           // 스핀으로 돌아간 각도는 누적 유지 (멈춰도 원상복구하지 않음)
           this.aimRot += ST.Input.spinVel * dt * 0.55;
@@ -850,7 +854,7 @@ window.ST = window.ST || {};
         ctx.fillStyle = 'rgba(138,214,255,0.3)';
         ctx.fillRect(x, y1 - hh, w, hh);
         const gap = 34;
-        const off = (this.time * 58) % gap; // 위로 흐르는 루프
+        const off = this._chevPhase || 0; // 위로 흐르는 루프 (속도 = 스핀 각속도 연동, update에서 적분)
         ctx.strokeStyle = 'rgba(205,238,255,0.9)';
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
