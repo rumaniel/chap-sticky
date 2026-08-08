@@ -55,6 +55,7 @@ window.ST = window.ST || {};
       this.shape = ST.Shapes.get(shapeId);
       this.map = ST.Materials.get(mapId);
       this.buildWallCache();
+      this._buildGaugeBand();
       this.state = 'idle';
       this.toyScreen = { x: REST.x, y: REST.y };
       this.flight = this.stuckSt = this.fallAnim = this.bounceAnim = this.flopAnim = null;
@@ -163,6 +164,10 @@ window.ST = window.ST || {};
       const s = ST.Modes.session;
       this.simDefer = !!(s && s.simMode);
       this.hintT = s && s.round === 0 && s.cur === 0 ? 6 : 0;
+      // 첫 던지기 성공 전까지 고스트 손 시연 (기기당 1회 학습)
+      let tut = null;
+      try { tut = localStorage.getItem('stickytoss_tut'); } catch (e) { /* file:// 등 */ }
+      this._ghostOn = !tut;
       ST.Input.enable();
     },
 
@@ -184,7 +189,10 @@ window.ST = window.ST || {};
           }
         }
       };
-      I.onCancel = () => { /* 제자리 복귀는 update에서 lerp */ };
+      I.onCancel = (speed) => {
+        // 제자리 복귀는 update에서 lerp. 취소된 세기를 게이지에 잠깐 남겨 학습 피드백
+        if (this.state === 'aim' && speed != null) this._lastGauge = { speed, t: 1.2 };
+      };
       I.onThrow = (flick, spin) => {
         if (this.state !== 'aim') return;
         const T = ST.Physics.TUNE;
@@ -193,6 +201,9 @@ window.ST = window.ST || {};
         this.flight.angle = this.aimRot || 0; // 조준 중 돌린 자세 그대로 비행
         this.state = 'fly';
         this.hintT = 0;
+        this._lastGauge = { speed: Math.hypot(flick.vx, flick.vy), t: 1.4 };
+        this._ghostOn = false;
+        try { localStorage.setItem('stickytoss_tut', '1'); } catch (e) { /* noop */ }
         ST.Audio.play('whoosh');
         ST.Input.disable();
       };
@@ -203,6 +214,7 @@ window.ST = window.ST || {};
       this.time += dt;
       if (this.banner) { this.banner.t -= dt; if (this.banner.t <= 0) this.banner = null; }
       if (this.hintT > 0) this.hintT -= dt;
+      if (this._lastGauge) { this._lastGauge.t -= dt; if (this._lastGauge.t <= 0) this._lastGauge = null; }
 
       const T = ST.Physics.TUNE;
 
@@ -656,6 +668,10 @@ window.ST = window.ST || {};
             ctx.arc(t.x, t.y, S + 27, spd + Math.PI, spd + Math.PI + 1.0);
             ctx.stroke();
           }
+          if (this.state === 'aim') {
+            if (ST.Input.holding) this._drawTraj();
+            else if (this._ghostOn) this._drawGhost();
+          }
         }
       }
 
@@ -671,6 +687,9 @@ window.ST = window.ST || {};
         ctx.fillText(ST.I18N.t('hint.spin'), 240, 584);
         ctx.globalAlpha = 1;
       }
+
+      // 파워 게이지 (드래그 중 라이브 + 던진 직후 잔상)
+      this._drawGaugeUI();
 
       // HUD
       this._drawHUD();
@@ -696,6 +715,116 @@ window.ST = window.ST || {};
       ST.FX.draw(ctx);
       ST.Score.drawFloaters(ctx);
       ctx.restore();
+    },
+
+    /* 게이지 밴드: 현재 모형×맵에서 "붙는 세기" 구간을 플릭 속도(px/ms)로 환산.
+     * 전패드 접촉 가정, 접선 성분은 평균 몫(0.4m/s)으로 근사 — 안내용 근사치 */
+    _buildGaugeBand() {
+      const T = ST.Physics.TUNE;
+      const sumGrip = this.shape.stickyPoints.reduce((s, p) => s + p.grip, 0);
+      const limit = sumGrip * this.map.mat.grip * ST.Sticky.K_MAX;
+      const toSpeed = (vz) => Math.max(0, Math.min(T.VZ_MAX, vz)) / T.KZ;
+      this.gaugeBand = {
+        max: T.VZ_MAX / T.KZ,
+        min: ST.Input.MIN_FLICK,
+        limit: toSpeed(limit / this.shape.mass - 0.4),
+        sweet: toSpeed(ST.Sticky.SWEET * limit / this.shape.mass - 0.4),
+      };
+    },
+
+    // 부분 궤적 미리보기: 현재 드래그 속도로 던졌을 때의 초반 50% 깊이까지 점선
+    _drawTraj() {
+      const I = ST.Input;
+      if (I.liveSpeed < 0.12 || I.liveFlick.vy > -0.03) return;
+      const T = ST.Physics.TUNE;
+      const hw = ST.Physics.unproject(this.toyScreen.x, this.toyScreen.y, T.HOLD_Z);
+      const f = ST.Physics.makeThrow(I.liveFlick, I.spinVel, hw);
+      const spin = Math.abs(f.spin) > 4;
+      const pts = [];
+      for (let i = 0; i < 160; i++) {
+        const res = ST.Physics.stepFlight(f, 1 / 120);
+        if (i >= 3) pts.push(ST.Physics.project(f.x, f.y, f.z));
+        if (res || f.z > T.WALL_Z * 0.5) break;
+      }
+      const base = Math.max(0, Math.min(0.65, (I.liveSpeed - 0.08) * 1.1)); // 약할수록 흐리게
+      pts.forEach((p, i) => {
+        const k = i / pts.length;
+        ctx.globalAlpha = base * (1 - k * 0.8);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (5.5 - k * 2.6) * Math.max(0.55, p.s), 0, Math.PI * 2);
+        ctx.fillStyle = spin ? '#8ad6ff' : '#ffe9a8';
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(30,20,10,0.35)'; // 밝은 벽 대비
+        ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+    },
+
+    // 파워 게이지: 드래그 중 라이브 세기 vs 찹 존(초록)·과속(빨강)·무효(회색) + 스윗 라인
+    _drawGaugeUI() {
+      const I = ST.Input;
+      const B = this.gaugeBand;
+      if (!B) return;
+      let sp = null, alpha = 1;
+      if (this.state === 'aim' && I.holding) sp = I.liveSpeed;
+      else if (this._lastGauge) { sp = this._lastGauge.speed; alpha = Math.min(1, this._lastGauge.t / 0.45); }
+      if (sp == null) return;
+
+      const x = 24, w = 12, y1 = 700, hh = 260;
+      const yAt = (v) => y1 - hh * Math.max(0, Math.min(1, v / B.max));
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgba(10,8,24,0.55)';
+      ctx.beginPath();
+      ctx.roundRect(x - 4, y1 - hh - 4, w + 8, hh + 8, 7);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.16)';                    // 무효(너무 약함)
+      ctx.fillRect(x, yAt(B.min), w, y1 - yAt(B.min));
+      ctx.fillStyle = 'rgba(126,217,87,0.5)';                      // 찹 존
+      ctx.fillRect(x, yAt(B.limit), w, yAt(B.min) - yAt(B.limit));
+      ctx.fillStyle = 'rgba(255,120,100,0.5)';                     // 과속(튕김)
+      ctx.fillRect(x, y1 - hh, w, yAt(B.limit) - (y1 - hh));
+      const ys = yAt(B.sweet);
+      ctx.strokeStyle = '#c7f77a';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x - 5, ys); ctx.lineTo(x + w + 5, ys); ctx.stroke();
+      const yc = yAt(sp);
+      const over = sp > B.limit;
+      // 얇은 내부 채움 — 존 색을 가리지 않게
+      ctx.fillStyle = over ? 'rgba(255,190,190,0.9)' : 'rgba(255,255,255,0.85)';
+      ctx.fillRect(x + 4, yc, w - 8, y1 - yc);
+      ctx.fillStyle = over ? '#ff8a8a' : sp >= B.min ? '#fff' : 'rgba(255,255,255,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(x + w + 3, yc);
+      ctx.lineTo(x + w + 12, yc - 6);
+      ctx.lineTo(x + w + 12, yc + 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    },
+
+    // 고스트 손: 찐득이를 잡고 위로 스윽 미는 시연 (첫 던지기 전까지 루프)
+    _drawGhost() {
+      const cyc = this.time % 1.9;
+      if (cyc > 1.35) return;
+      const t = cyc / 1.35;
+      const k = Math.pow(t, 1.8); // 천천히 잡고 → 가속하며 밀어올림 (플릭 리듬)
+      const sx = 246, sy = 668, ex = 302, ey = 452;
+      const x = sx + (ex - sx) * k, y = sy + (ey - sy) * k;
+      const a = t < 0.12 ? t / 0.12 : t > 0.72 ? Math.max(0, (1 - t) / 0.28) : 1;
+      ctx.globalAlpha = a * 0.9;
+      const kb = Math.pow(Math.max(0, t - 0.22), 1.8); // 꼬리 잔상
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(sx + (ex - sx) * kb, sy + (ey - sy) * kb);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.font = '38px "Segoe UI Emoji", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('👆', x, y + 34);
+      ctx.globalAlpha = 1;
     },
 
     _drawGrip(x, y, gh) {

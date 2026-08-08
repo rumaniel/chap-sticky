@@ -19,9 +19,12 @@ window.ST = window.ST || {};
 
   const Input = {
     holding: false,
+    MIN_FLICK,
     pos: { x: 0, y: 0 },       // 현재 포인터(가상 좌표)
     spinCharge: 0,             // 시각화용 누적 스핀
     spinVel: 0,
+    liveFlick: { vx: 0, vy: 0 }, // 드래그 중 실시간 플릭 속도 추정(px/ms, EMA)
+    liveSpeed: 0,
     onGrab: null, onHoldMove: null, onThrow: null, onCancel: null, onTap: null,
     grabTest: null,            // (x,y)=>bool 잡기 허용 판정
 
@@ -31,7 +34,15 @@ window.ST = window.ST || {};
     // 매 프레임: 스핀 동작을 멈추면 이펙트/스핀 자연 소멸 (커브볼 해제)
     tick(dt) {
       if (!holding) return;
-      if (performance.now() - (this._lastSpinAt || 0) > 160) {
+      const now = performance.now();
+      // 포인터가 멈추면 라이브 속도도 자연 감쇠 (놓는 순간 계산과 일관)
+      if (now - (this._lastMoveAt || 0) > 70) {
+        const kv = Math.exp(-dt * 7);
+        this.liveFlick.vx *= kv;
+        this.liveFlick.vy *= kv;
+        this.liveSpeed = Math.hypot(this.liveFlick.vx, this.liveFlick.vy);
+      }
+      if (now - (this._lastSpinAt || 0) > 160) {
         const k = Math.exp(-dt * 5.5);
         spinVel *= k;
         spinAccum *= k;
@@ -47,6 +58,7 @@ window.ST = window.ST || {};
       samples.length = 0;
       spinAccum = 0; spinVel = 0; lastAngle = null;
       this.spinCharge = 0; this.spinVel = 0;
+      this.liveFlick.vx = 0; this.liveFlick.vy = 0; this.liveSpeed = 0;
     },
 
     _toVirtual(e) {
@@ -118,6 +130,20 @@ window.ST = window.ST || {};
       this.spinCharge = spinAccum;
       this.spinVel = spinVel;
 
+      // 라이브 플릭 추정: 놓는 순간(_up)과 같은 FLICK_MS 윈도우 → EMA
+      let wf = null;
+      for (const s of samples) {
+        if (now - s.t <= FLICK_MS) { wf = s; break; }
+      }
+      const wl = samples[samples.length - 1];
+      if (wf && wl.t > wf.t) {
+        const dtw = wl.t - wf.t;
+        this.liveFlick.vx = this.liveFlick.vx * 0.55 + ((wl.x - wf.x) / dtw) * 0.45;
+        this.liveFlick.vy = this.liveFlick.vy * 0.55 + ((wl.y - wf.y) / dtw) * 0.45;
+        this.liveSpeed = Math.hypot(this.liveFlick.vx, this.liveFlick.vy);
+      }
+      this._lastMoveAt = now;
+
       if (this.onHoldMove) this.onHoldMove(p);
     },
 
@@ -144,8 +170,8 @@ window.ST = window.ST || {};
       this._reset();
 
       if (speed < MIN_FLICK || flick.vy > -0.1) {
-        // 너무 약하거나 위로 던지지 않음 → 취소
-        if (this.onCancel) this.onCancel();
+        // 너무 약하거나 위로 던지지 않음 → 취소 (속도 전달 = 게이지 피드백용)
+        if (this.onCancel) this.onCancel(speed);
         return;
       }
       if (this.onThrow) this.onThrow(flick, spinOut);

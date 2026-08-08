@@ -57,7 +57,7 @@ window.ST = window.ST || {};
   }
 
   const Sticky = {
-    TOY_R, V2, pointWorld,
+    TOY_R, V2, pointWorld, K_MAX, SWEET,
 
     /* ---------------- 충돌 해석 (포인트 단위 머테리얼) ---------------- */
     resolveImpact(impact, shape, map) {
