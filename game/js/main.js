@@ -669,8 +669,11 @@ window.ST = window.ST || {};
             ctx.stroke();
           }
           if (this.state === 'aim') {
-            if (ST.Input.holding) this._drawTraj();
-            else if (this._ghostOn) this._drawGhost();
+            if (ST.Input.holding) {
+              // 원형 드래그 중엔 속도 벡터가 회전해 예측이 무의미 → 커브 힌트로 대체
+              if (this._spinActive()) this._drawCurveHint(t.x, t.y, S);
+              else this._drawTraj();
+            } else if (this._ghostOn) this._drawGhost();
           }
         }
       }
@@ -732,6 +735,39 @@ window.ST = window.ST || {};
       };
     },
 
+    // 스핀 제스처 진행 중 판정 (스핀 호 표시 임계와 동일 + 최근 회전 입력)
+    _spinActive() {
+      return Math.abs(ST.Input.spinCharge) > 2.5 ||
+        performance.now() - (ST.Input._lastSpinAt || 0) < 220;
+    },
+
+    // 커브 힌트: 착탄 예측 대신 "이만큼 이쪽으로 휜다" — 휜 화살표 (Magnus 방향과 일치)
+    _drawCurveHint(tx, ty, S) {
+      const I = ST.Input;
+      const T = ST.Physics.TUNE;
+      const dir = Math.sign(I.spinVel || I.spinCharge) || 1;
+      const norm = Math.min(1, Math.abs(I.spinVel) * T.KSPIN / T.SPIN_MAX);
+      const bend = dir * (24 + 76 * norm);
+      const y0 = ty - S - 34;
+      const cx = tx + bend * 0.15, cy = y0 - 62, ex = tx + bend, ey = y0 - 104;
+      ctx.globalAlpha = 0.65 + 0.25 * Math.sin(this.time * 6);
+      ctx.strokeStyle = '#8ad6ff';
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(tx, y0);
+      ctx.quadraticCurveTo(cx, cy, ex, ey);
+      ctx.stroke();
+      const ang = Math.atan2(ey - cy, ex - cx); // 끝점 접선
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - Math.cos(ang - 0.5) * 14, ey - Math.sin(ang - 0.5) * 14);
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - Math.cos(ang + 0.5) * 14, ey - Math.sin(ang + 0.5) * 14);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    },
+
     // 부분 궤적 미리보기: 현재 드래그 속도로 던졌을 때의 초반 50% 깊이까지 점선
     _drawTraj() {
       const I = ST.Input;
@@ -767,7 +803,8 @@ window.ST = window.ST || {};
       const B = this.gaugeBand;
       if (!B) return;
       let sp = null, alpha = 1;
-      if (this.state === 'aim' && I.holding) sp = I.liveSpeed;
+      // 스핀 중 라이브 게이지는 "도는 속도"를 읽어 오해 유발 → 숨김 (던진 직후 잔상은 유지)
+      if (this.state === 'aim' && I.holding && !this._spinActive()) sp = I.liveSpeed;
       else if (this._lastGauge) { sp = this._lastGauge.speed; alpha = Math.min(1, this._lastGauge.t / 0.45); }
       if (sp == null) return;
 
