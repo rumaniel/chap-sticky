@@ -33,8 +33,8 @@ window.ST = window.ST || {};
     TORQUE_STRESS: 1.35,
     ROLL_L: TOY_R * 1.15,
     ROLL_NUDGE: 0.14,   // 초기 기울기(rad)
-    ROLL_MINDROP: TOY_R * 0.55, // 롤 1회당 최소 하강 보장 (상승 롤 방지)
-    ROLL_MAXPHI: Math.PI * 2.2,
+    ROLL_CONTACT: TOY_R * 0.25, // 재접촉 판정: 자유 패드가 피벗보다 이만큼 아래
+    ROLL_MAXPHI: Math.PI * 1.5,
     SETTLE: 0.35,
   };
 
@@ -289,7 +289,6 @@ window.ST = window.ST || {};
         pivotIds: support.map((p) => p.id),
         phi: 0, vel: 0, dir,
         step: st.shape.rollStep || Math.PI,
-        y0: st.y, // 하강량 검증 기준
       };
       st.phase = 'roll';
       st.phaseT = 0;
@@ -306,17 +305,27 @@ window.ST = window.ST || {};
       R.phi += d;
 
       // 피벗 중심 실제 회전 → 하강이 물리로 발생
+      // 주의: 바디 각도는 화면(y아래+) 기준 시계방향이 +. 월드(y위+)에서 같은 회전은
+      // 수학적 음의 방향이므로 궤도는 -a 로 돌려야 몸통과 궤도가 일치한다.
       const a = d * R.dir;
       const c = Math.cos(a), s = Math.sin(a);
       const dx = st.x - R.pivot.x, dy = st.y - R.pivot.y;
-      st.x = R.pivot.x + dx * c - dy * s;
-      st.y = R.pivot.y + dx * s + dy * c;
+      st.x = R.pivot.x + dx * c + dy * s;
+      st.y = R.pivot.y - dx * s + dy * c;
       st.angle += a;
       st.x += st.driftX * dt * 30;
 
-      // 완료 조건: 규정 스텝 + 최소 하강 달성 (안 내려갔으면 계속 굴러감 — 상승 롤 방지)
-      const dropped = R.y0 - st.y >= V2.ROLL_MINDROP;
-      if ((R.phi >= R.step - 1e-6 && dropped) || R.phi >= V2.ROLL_MAXPHI) {
+      // 완료 = 기하학적 재접촉: 회전 중 자유 패드가 피벗 아래에 도달하는 순간 착지.
+      // 새 지지가 닿으면 멈추는 실제 물리 — 피벗 위로 넘어가는 상승 궤도 원천 차단.
+      let complete = R.phi >= V2.ROLL_MAXPHI;
+      if (!complete && R.phi >= (R.step || Math.PI) * 0.45) {
+        for (const p of st.pads) {
+          if (p.stuck) continue; // 피벗(남은 부착 패드)은 제외
+          const wp = pointWorld(st, p.def);
+          if (wp.y < R.pivot.y - V2.ROLL_CONTACT) { complete = true; break; }
+        }
+      }
+      if (complete) {
         // 롤 완료: 피벗 패드 해제, 새 아래쪽 패드 재부착 시도
         const vel = R.vel;
         st.pads.forEach((p) => {
@@ -418,7 +427,7 @@ window.ST = window.ST || {};
         S.v += acc * dt;
         const prev = S.a;
         S.a += S.v * dt;
-        st.angle += S.a - prev;
+        st.angle -= S.a - prev; // 화면 좌표계(y아래+)에선 반대 부호
         st.x = S.pivot.x + Math.sin(S.a) * S.L;
         st.y = S.pivot.y - Math.cos(S.a) * S.L;
         if (P.swingT > SWING_MAX) {
