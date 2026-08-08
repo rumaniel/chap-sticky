@@ -25,12 +25,13 @@ window.ST = window.ST || {};
     const ov = document.getElementById('overlay');
     ov.style.width = cw + 'px';
     ov.style.height = chh + 'px';
-    // FAB 버튼(사운드/언어)을 캔버스 우하단에 정렬
+    // FAB 버튼(사운드/언어)을 캔버스 좌하단에 정렬 — 우하단은 itch 임베드 전체화면 버튼과 겹침
     const left = Math.round((vw - cw) / 2), top = Math.round((vh - chh) / 2);
     const snd = document.getElementById('sndToggle');
     const lng = document.getElementById('langToggle');
-    if (snd) { snd.style.left = (left + cw - 54) + 'px'; snd.style.top = (top + chh - 54) + 'px'; }
-    if (lng) { lng.style.left = (left + cw - 54) + 'px'; lng.style.top = (top + chh - 104) + 'px'; }
+    // 가로 배치 — 세로 스택은 위 버튼이 파워 게이지 하단(가상 y~700)을 침범
+    if (snd) { snd.style.left = (left + 10) + 'px'; snd.style.top = (top + chh - 54) + 'px'; }
+    if (lng) { lng.style.left = (left + 64) + 'px'; lng.style.top = (top + chh - 54) + 'px'; }
   }
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 100));
