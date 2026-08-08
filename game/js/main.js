@@ -840,20 +840,28 @@ window.ST = window.ST || {};
         ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(x - 5, ys); ctx.lineTo(x + w + 5, ys); ctx.stroke();
       }
-      // 커브볼 모드 — 스핀 세기만큼 차오르는 파란 충전 바 (스핀 호·화살표와 같은 색 언어)
+      // 커브볼 모드 — 바 전체를 덮는 등속 셰브런 연출 (스핀량 표현 안 함, 요동 없음)
       if (blend > 0.02) {
-        const norm = Math.min(1, Math.abs(I.spinVel) * T.KSPIN / T.SPIN_MAX);
-        const hf = hh * Math.max(0.05, norm);
-        const yTop = y1 - hf;
-        ctx.globalAlpha = alpha * blend * (0.8 + 0.2 * Math.sin(this.time * 6));
-        const g = ctx.createLinearGradient(0, y1, 0, yTop);
-        g.addColorStop(0, 'rgba(138,214,255,0.25)');
-        g.addColorStop(1, 'rgba(138,214,255,0.85)');
-        ctx.fillStyle = g;
-        ctx.fillRect(x, yTop, w, hf);
-        ctx.strokeStyle = '#cdeeff';
+        ctx.save();
+        ctx.globalAlpha = alpha * blend;
+        ctx.beginPath();
+        ctx.rect(x, y1 - hh, w, hh);
+        ctx.clip();
+        ctx.fillStyle = 'rgba(138,214,255,0.3)';
+        ctx.fillRect(x, y1 - hh, w, hh);
+        const gap = 34;
+        const off = (this.time * 58) % gap; // 위로 흐르는 루프
+        ctx.strokeStyle = 'rgba(205,238,255,0.9)';
         ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(x - 2, yTop); ctx.lineTo(x + w + 2, yTop); ctx.stroke();
+        ctx.lineCap = 'round';
+        for (let yy = y1 + gap - off; yy > y1 - hh - gap; yy -= gap) {
+          ctx.beginPath();
+          ctx.moveTo(x + 1.5, yy);
+          ctx.lineTo(x + w / 2, yy - 7);
+          ctx.lineTo(x + w - 1.5, yy);
+          ctx.stroke();
+        }
+        ctx.restore();
       }
       // 현재 세기 바늘 (직구 라이브 / 던진 직후 잔상)
       if (sp != null) {
