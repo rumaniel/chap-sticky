@@ -7,9 +7,9 @@ window.ST = window.ST || {};
 (function () {
   const TABLES = {
     ko: {
-      'title': '찐득이 토스 - Sticky Toss',
-      'logo': '찐득이<br>토스!',
-      'logoSub': 'STICKY TOSS',
+      'title': '찹! 찐득이 - Splat! Sticky',
+      'logo': '찹!<br>찐득이',
+      'logoSub': 'SPLAT! STICKY',
       'tagline': '벽에 던져라, 붙어라, 버텨라!',
       'titleHint': '추억의 찐득이 장난감을 진짜 물리로!<br>드래그로 던지고, 빙글빙글 돌려 커브볼도 가능',
       'btn.start': '시작하기',
@@ -83,9 +83,9 @@ window.ST = window.ST || {};
     },
 
     en: {
-      'title': 'Sticky Toss',
-      'logo': 'STICKY<br>TOSS!',
-      'logoSub': '찐득이 토스',
+      'title': 'Splat! Sticky',
+      'logo': 'SPLAT!<br>STICKY',
+      'logoSub': '찹! 찐득이',
       'tagline': 'Throw it, stick it, hang on!',
       'titleHint': 'The classic sticky wall crawler toy, with real physics!<br>Drag to throw, twirl for a curveball',
       'btn.start': 'START',

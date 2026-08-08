@@ -1,4 +1,4 @@
-# 찐득이 토스 (Sticky Toss)
+# 찹! 찐득이 (Splat! Sticky)
 
 2026 미니게임 메이커스 챌린지 출품작. 추억의 찐득이(sticky wall crawler) 장난감을 물리 기반 HTML5 미니게임으로.
 
