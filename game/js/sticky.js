@@ -14,9 +14,10 @@
 window.ST = window.ST || {};
 
 (function () {
-  const K_MAX = 2.1;
+  const K_MAX = 2.45;      // 튕김 한계 — 첫 경험 관대하게
   const TOY_R = 0.17;
   const SWEET = 0.62;
+  const SWEET_HARD = 0.55; // 과속 쪽 품질 하락 완만화 (기존 1-SWEET=0.38)
   const SWING_MAX = 1.05;
 
   // v2 튜닝 (시뮬로 조정)
@@ -39,7 +40,7 @@ window.ST = window.ST || {};
   };
 
   function bell(r) {
-    const d = (r - SWEET) / (r < SWEET ? SWEET : 1 - SWEET);
+    const d = (r - SWEET) / (r < SWEET ? SWEET : SWEET_HARD);
     return Math.max(0, 1 - d * d);
   }
 
@@ -106,7 +107,7 @@ window.ST = window.ST || {};
       const r = impulse / limit;
       const q = bell(r);
       const spinPenalty = Math.min(0.25, Math.abs(impact.spin) * 0.006);
-      const gh = Math.max(0.15, (0.35 + 0.65 * q) * (1 - spinPenalty));
+      const gh = Math.max(0.15, (0.42 + 0.58 * q) * (1 - spinPenalty));
 
       return {
         stuck: true, contacts, adhesion, impulse, speed,

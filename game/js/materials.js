@@ -93,7 +93,7 @@ window.ST = window.ST || {};
 
     // ============ 칠판 ============
     chalk: {
-      id: 'chalk', name: '교실 칠판', desc: '착착 붙는다 · 오래 버티기 명당', unlock: 10000,
+      id: 'chalk', name: '교실 칠판', desc: '착착 붙는다 · 오래 버티기 명당', unlock: 0,
       mat: { grip: 1.3, decay: 0.032, flipPeriod: 1.4, slideStep: 0.85, slideCont: 0, bounce: 0.42 },
       skyColor: '#4a3b2a', floorColor: ['#8a7355', '#5f4d36'],
       // 나무 테두리 = 그립 없음, 칠판 안쪽만 유효
@@ -129,7 +129,7 @@ window.ST = window.ST || {};
 
     // ============ 냉장고 ============
     fridge: {
-      id: 'fridge', name: '냉장고', desc: '자석 스팟 대박 보너스!', unlock: 20000,
+      id: 'fridge', name: '냉장고', desc: '자석 스팟 대박 보너스!', unlock: 12000,
       mat: { grip: 0.9, decay: 0.05, flipPeriod: 1.05, slideStep: 1.0, slideCont: 4, bounce: 0.55 },
       skyColor: '#2d3f4a', floorColor: ['#8f9aa5', '#5d6771'],
       // 손잡이 = 그립 없음
@@ -170,7 +170,7 @@ window.ST = window.ST || {};
 
   ST.Materials = {
     all: MAPS,
-    list: ['room', 'glass', 'chalk', 'fridge'].map((k) => MAPS[k]),
+    list: ['chalk', 'room', 'glass', 'fridge'].map((k) => MAPS[k]),
     get(id) { return MAPS[id] || MAPS.room; },
 
     /* 벽면 좌표(월드 m)의 머테리얼. 존 밖/노그립 영역 = null (안 붙음) */

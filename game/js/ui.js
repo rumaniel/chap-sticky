@@ -10,7 +10,7 @@ window.ST = window.ST || {};
   let nextMode = 'practice';
   let titleAnim = null;
 
-  ST.sel = { shape: 'man', map: 'room' };
+  ST.sel = { shape: 'man', map: 'chalk' }; // 첫 맵 = 관대한 칠판 (튜토리얼 역할)
 
   function show(id) {
     $('overlay').classList.add('show');
