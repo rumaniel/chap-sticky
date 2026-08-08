@@ -155,6 +155,7 @@ window.ST = window.ST || {};
       this.impactPos = null;
       this.curMult = 0;
       this.wasStuck = false;
+      this.aimRot = 0;
       const s = ST.Modes.session;
       this.simDefer = !!(s && s.simMode);
       this.hintT = s && s.round === 0 && s.cur === 0 ? 6 : 0;
@@ -185,6 +186,7 @@ window.ST = window.ST || {};
         const T = ST.Physics.TUNE;
         const hw = ST.Physics.unproject(this.toyScreen.x, this.toyScreen.y, T.HOLD_Z);
         this.flight = ST.Physics.makeThrow(flick, spin.vel, hw);
+        this.flight.angle = this.aimRot || 0; // 조준 중 돌린 자세 그대로 비행
         this.state = 'fly';
         this.hintT = 0;
         ST.Audio.play('whoosh');
@@ -202,7 +204,10 @@ window.ST = window.ST || {};
 
       if (this.state === 'aim') {
         ST.Input.tick(dt); // 스핀 멈추면 커브 이펙트 자연 소멸
-        if (!ST.Input.holding) {
+        if (ST.Input.holding) {
+          // 스핀으로 돌아간 각도는 누적 유지 (멈춰도 원상복구하지 않음)
+          this.aimRot += ST.Input.spinVel * dt * 0.55;
+        } else {
           this.toyScreen.x += (REST.x - this.toyScreen.x) * Math.min(1, dt * 10);
           this.toyScreen.y += (REST.y - this.toyScreen.y) * Math.min(1, dt * 10);
         }
@@ -314,7 +319,7 @@ window.ST = window.ST || {};
     _handleStickyEvents(evs, st, onFall) {
       for (const e of evs) {
         const t = e.type || e;
-        if (t === 'flip') ST.Audio.play('flip');
+        if (t === 'flip' || t === 'roll') ST.Audio.play('flip');
         else if (t === 'land') { ST.Audio.play('land'); ST.FX.addShake(2); this._dustAt(st, 4); }
         else if (t === 'slip') ST.Audio.play('slip');
         else if (t === 'peelstart') ST.Audio.play('peel');
@@ -545,7 +550,7 @@ window.ST = window.ST || {};
           ctx.rotate(m.fall ? m.fall.rot : m.st.angle);
           this.shape.draw(ctx, S, m.fall
             ? { wob: 1, t: this.time + m.player, mood: 'dizzy' }
-            : { wob: m.st.wob, t: this.time + m.player, squash: m.st.squash, mood: m.st.mood, contacts: m.st.contacts });
+            : { wob: m.st.wob, t: this.time + m.player, squash: m.st.squash, mood: m.st.mood, contacts: ST.Sticky.displayContacts(m.st, this.time) });
           ctx.restore();
           // 플레이어 색 링 + 이름표
           ctx.strokeStyle = m.color;
@@ -562,7 +567,7 @@ window.ST = window.ST || {};
           ctx.strokeText(m.name, p.x, p.y - S - 16);
           ctx.fillStyle = m.color;
           ctx.fillText(m.name, p.x, p.y - S - 16);
-          if (!m.fall) this._drawGrip(p.x, p.y - S - 34, m.st.gh);
+          if (!m.fall) this._drawGrip(p.x, p.y - S - 46, m.st.gh);
         }
       }
 
@@ -574,7 +579,7 @@ window.ST = window.ST || {};
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(st.angle);
-        this.shape.draw(ctx, S, { wob: st.wob, t: this.time, squash: st.squash, mood: st.mood, contacts: st.contacts });
+        this.shape.draw(ctx, S, { wob: st.wob, t: this.time, squash: st.squash, mood: st.mood, contacts: ST.Sticky.displayContacts(st, this.time) });
         ctx.restore();
         // 그립 게이지
         this._drawGrip(p.x, p.y - S - 16, st.gh);
@@ -630,8 +635,7 @@ window.ST = window.ST || {};
           ctx.fill();
           ctx.save();
           ctx.translate(t.x, t.y + (ST.Input.holding ? 0 : Math.sin(this.time * 2.2) * 4));
-          const spinRot = ST.Input.holding ? ST.Input.spinCharge * 0.6 : 0;
-          ctx.rotate(spinRot);
+          ctx.rotate(this.aimRot || 0);
           this.shape.draw(ctx, S, { wob: ST.Input.holding ? 0.35 : 0.12, t: this.time, mood: 'happy' });
           ctx.restore();
           // 스핀 인디케이터 — 빠른 이중 호 (텍스트 없음)

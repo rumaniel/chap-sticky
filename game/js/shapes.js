@@ -83,7 +83,7 @@ window.ST = window.ST || {};
     // ============ 찐득맨 (기본) ============
     man: {
       id: 'man', name: '찐득맨', desc: '양손·양발이 끈적', unlock: 0,
-      mass: 1.0, decayMod: 1.0, radius: 0.95,
+      mass: 1.0, decayMod: 1.0, radius: 0.95, rollStep: Math.PI,
       color: '#7ed957', dark: '#48a53c', light: '#c7f77a',
       stickyPoints: [
         { id: 'lh', x: -0.92, y: -0.50, grip: 1.0 },
@@ -139,13 +139,15 @@ window.ST = window.ST || {};
     // ============ 문어 ============
     octo: {
       id: 'octo', name: '문어찐득', desc: '다리 끝 8곳이 끈적', unlock: 5000,
-      mass: 1.1, decayMod: 0.85, radius: 0.95,
+      mass: 1.1, decayMod: 0.85, radius: 0.95, rollStep: Math.PI / 2,
       color: '#e88ac8', dark: '#b45a99', light: '#ffc6ec',
       stickyPoints: (function () {
+        // 전방위 방사형 8다리 — 어느 방향으로 굴러도 다음 다리가 벽에 닿는다
         const pts = [];
         for (let i = 0; i < 8; i++) {
-          const a = Math.PI * (0.08 + (i / 7) * 0.84); // 아래 반원 부채꼴
-          pts.push({ id: 't' + i, x: Math.cos(a) * (i % 2 ? 0.92 : 0.75), y: 0.25 + Math.sin(a) * (i % 2 ? 0.68 : 0.55), grip: 0.55 });
+          const a = -Math.PI / 2 + (i * Math.PI) / 4;
+          const r = i % 2 ? 0.92 : 0.78;
+          pts.push({ id: 't' + i, x: Math.cos(a) * r, y: Math.sin(a) * r, grip: 0.55 });
         }
         return pts;
       })(),
@@ -159,26 +161,28 @@ window.ST = window.ST || {};
 
         ctx.strokeStyle = this.color;
         this.stickyPoints.forEach((p, i) => {
-          const tx = p.x * S + sway(i * 1.7), ty = p.y * S + Math.abs(sway(i * 1.7 + 2)) * 0.5;
-          // 머리 아래에서 곡선 다리
+          const tx = p.x * S + sway(i * 1.7), ty = p.y * S + sway(i * 1.7 + 2) * 0.6;
+          // 중심에서 방사형 곡선 다리
+          const mx = p.x * 0.55 * S + sway(i * 1.3) * 0.5;
+          const my = p.y * 0.55 * S - Math.abs(p.x) * 0.12 * S;
           ctx.beginPath();
           ctx.lineCap = 'round';
-          ctx.lineWidth = S * 0.16;
-          ctx.moveTo(p.x * 0.25 * S, 0.1 * S);
-          ctx.quadraticCurveTo(p.x * 0.6 * S, (p.y * 0.4 + 0.3) * S, tx, ty);
+          ctx.lineWidth = S * 0.15;
+          ctx.moveTo(p.x * 0.18 * S, p.y * 0.18 * S);
+          ctx.quadraticCurveTo(mx, my, tx, ty);
           ctx.stroke();
           stickyGlow(ctx, { x: tx / S, y: ty / S }, S, contacts && contacts.has(p.id));
           blob(ctx, tx, ty, S * 0.12, this.light);
         });
 
-        // 머리 돔
-        const hy = -0.32 * S + sway(5) * 0.4;
+        // 머리 돔 (중앙)
+        const hy = -0.1 * S + sway(5) * 0.4;
         ctx.beginPath();
         ctx.fillStyle = this.color;
-        ctx.ellipse(0, hy, 0.52 * S, 0.55 * S, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, hy, 0.5 * S, 0.52 * S, 0, 0, Math.PI * 2);
         ctx.fill();
-        gloss(ctx, -0.16 * S, hy - 0.2 * S, 0.16 * S, 0.09 * S);
-        face(ctx, 0, hy + 0.05 * S, S * 0.85, opt.mood || 'happy');
+        gloss(ctx, -0.15 * S, hy - 0.18 * S, 0.15 * S, 0.09 * S);
+        face(ctx, 0, hy + 0.02 * S, S * 0.8, opt.mood || 'happy');
         ctx.restore();
       },
     },
@@ -186,7 +190,7 @@ window.ST = window.ST || {};
     // ============ 별 ============
     star: {
       id: 'star', name: '별찐득', desc: '꼭짓점 5곳이 끈적 · 가볍다', unlock: 15000,
-      mass: 0.8, decayMod: 1.2, radius: 0.95,
+      mass: 0.8, decayMod: 1.2, radius: 0.95, rollStep: (2 * Math.PI) / 5,
       color: '#ffd94f', dark: '#d9a520', light: '#fff3b0',
       stickyPoints: (function () {
         const pts = [];
