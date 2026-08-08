@@ -13,10 +13,7 @@ pdfmetrics.registerFont(TTFont('Malgun', 'C:/Windows/Fonts/malgun.ttf'))
 pdfmetrics.registerFont(TTFont('MalgunB', 'C:/Windows/Fonts/malgunbd.ttf'))
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SHOTS = os.path.join(
-    os.environ.get('LOCALAPPDATA', ''),
-    'Temp', 'claude', 'D--Repo-minigamemakers2026',
-    '604c22f5-6654-48b3-b9f1-4a795cac69ec', 'scratchpad', 'shots')
+SHOTS = os.path.join(HERE, 'shots')
 OUT = os.path.join(HERE, '게임기획안_찹찐득이.pdf')
 
 W, H = A4
@@ -118,7 +115,7 @@ rows = [
     ('플랫폼', '웹 브라우저 (PC·모바일·태블릿) — 설치 불필요'),
     ('인원', '연습 1인 / 파티 2~8인 핫시트 (한 기기 순서 던지기)'),
     ('조작', '원버튼: 드래그-플릭 던지기 + 빙글빙글 돌려 커브볼 (포켓몬GO식)'),
-    ('기술', '순수 JavaScript + Canvas · 외부 라이브러리/에셋 파일 0개 · 100KB 미만'),
+    ('기술', '순수 JavaScript + Canvas · 외부 라이브러리/에셋 파일 0개 · 약 130KB'),
     ('언어', '한국어 / English (게임 내 전환)'),
 ]
 ty = H - 84 * mm
@@ -136,8 +133,8 @@ for k, v in rows:
 
 # 대표 스샷 (우하단 크게 1장 + 소개)
 iw = 62 * mm
-ib = img('01-aim-spin-room.png', W - M - iw, ty - 6 * mm, iw)
-caption(W - M - iw, ib, iw, '조준 화면 — 스핀을 걸면 커브볼')
+ib = img('pdf_a_room_aim.png', W - M - iw, ty - 6 * mm, iw)
+caption(W - M - iw, ib, iw, '조준 — 부분 궤적 미리보기와 파워 게이지(초록=부착 존)')
 
 intro_y = ty - 14 * mm
 intro_y = body(intro_y, [
@@ -167,6 +164,7 @@ y = body(y, [
     '- 찐득이를 잡고 벽으로 플릭: 드래그 속도·각도가 그대로 포사체 궤적이 된다',
     '- 잡은 채 빙글빙글 돌리면 스핀 장전 → 릴리즈 후 Magnus 효과로 휘어지는 커브볼',
     '- 너무 세면 튕겨 나가고, 너무 약하면 바닥에 철퍼덕 — 머테리얼마다 스윗스팟이 다르다',
+    '- 부분 궤적 미리보기 + 파워 게이지(초록=부착 존) + 가이드 손 — 설명 없는 5초 온보딩',
     '',
     '**② 부착 — 끈적 패드 단위 판정',
     '- 충돌 순간 접촉한 끈적 패드(손·발·다리끝)마다 그 위치의 벽 머테리얼로 개별 연산',
@@ -176,13 +174,14 @@ y = body(y, [
     '- 패드마다 그립 HP: 위쪽 패드(장력 집중)부터 뽁뽁 벗겨진다',
     '- 지지가 무너지면 남은 패드를 축으로 토크 회전 — 천천히 기울다 가속하며 끝-넘기',
     '- 반대편 패드가 "찐득 주스"로 재부착, 주스가 닳면 결국 낙하 — 전 과정이 물리로 창발',
+    '- 부착 품질이 전개를 지배: 대충 붙을수록 요동·미끄덩 사건 — 같은 패턴도 매판 다른 크롤',
     '- 버틴 시간 × 과녁 배율 + 스팟 + 커브/퍼펙트 보너스 = 점수 (버틴 시간 병기)',
 ], size=9.8, leading=5.4)
 
 iw2 = 58 * mm
 gap = (W - 2 * M - 2 * iw2)
-ib1 = img('02-fly-curve-glass.png', M, y - 2 * mm, iw2)
-caption(M, ib1, iw2, '커브 비행 — 스핀 트레일과 그림자')
+ib1 = img('itch_s3_curve.png', M, y - 2 * mm, iw2)
+caption(M, ib1, iw2, '커브볼 모드 — 게이지 변신과 꺾임 예고 화살표')
 ib2 = img('03-stuck-crawl-chalk.png', M + iw2 + gap, y - 2 * mm, iw2)
 caption(M + iw2 + gap, ib2, iw2, '부착·크롤 — 그립 게이지와 실시간 가점')
 
@@ -212,7 +211,7 @@ y = body(y, [
 
 ib3 = img('04-party-simul-room.png', M, y - 2 * mm, iw2)
 caption(M, ib3, iw2, '파티 동시 크롤 — 3인 실시간 대결')
-ib4 = img('05-aim-fridge-star.png', M + iw2 + gap, y - 2 * mm, iw2)
+ib4 = img('pdf_b_fridge_star.png', M + iw2 + gap, y - 2 * mm, iw2)
 caption(M + iw2 + gap, ib4, iw2, '냉장고 맵 — 자석 스팟과 노그립 손잡이')
 
 c.showPage()
@@ -230,16 +229,18 @@ crit = [
     ('재미 · 몰입도', [
         '포켓몬GO식 직관 플릭 + 커브볼 — 5초 만에 배우고 계속 파게 되는 조작감',
         '그립 게이지·패드 깜빡임으로 "곧 넘어간다"를 읽는 예측 재미, 초당 가점의 실시간 긴장',
+        '품질 연동 크롤 분산 — 잘 던지면 라이드, 대충 던지면 조기 탈락. 같은 패턴도 매판 다른 전개',
         '해금(모형·맵) · 로컬 리더보드 · 파티 동시 크롤 — 반복 플레이 3중 동기',
     ]),
     ('게임 완성도', [
-        '물리·밸런스를 자동 시뮬레이션(모형×맵 9조합 프레임 추적)으로 회귀 검증',
+        '온보딩 UX: 부분 궤적 미리보기·파워 게이지(부착 존)·커브 모드 게이지 변신·가이드 손',
+        '물리·밸런스를 자동 시뮬레이션(모형×맵 조합 프레임 추적)으로 회귀 검증',
         '프로시저럴 사운드(외부 파일 0) · 파티클/히트스탑/스크린셰이크 폴리싱 · 60fps',
         '한국어/영어 즉시 전환 (전체 스트링 테이블화)',
     ]),
     ('구현 적합성', [
         '외부 라이브러리·에셋·네트워크 요청 0 — index.html 더블클릭만으로 오프라인 완전 동작',
-        '전체 빌드 100KB 미만 · 모바일 터치/반응형 · 크롬/엣지/사파리 호환',
+        '전체 빌드 약 130KB · 모바일 터치/반응형 · 크롬/엣지/사파리 호환',
         'GitHub Actions → itch.io 자동 배포 파이프라인 구축',
     ]),
     ('발전 가능성', [
@@ -271,7 +272,7 @@ sy = y - 13 * mm
 for ln in [
     '렌더링: HTML5 Canvas 2D, 가상 480×800 레터박스, DPR 대응 | 사운드: WebAudio 신스(저작권 클린)',
     '물리: 자체 구현 — 포사체·Magnus 커브·패드 그립 HP·토크 롤·진자 필오프 | 저장: localStorage',
-    '코드: 순수 JS 11모듈 약 2,700줄, 빌드 과정 없음 | 저장소: github.com/rumaniel/chap-sticky (공개)',
+    '코드: 순수 JS 11모듈 약 3,400줄, 빌드 과정 없음 | 저장소: github.com/rumaniel/chap-sticky (공개)',
 ]:
     c.setFillColor(INK)
     c.setFont('Malgun', 9)
