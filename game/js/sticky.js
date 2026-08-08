@@ -44,6 +44,11 @@ window.ST = window.ST || {};
     JIT_BASE: 0.15,     // 패드 HP 지터 최소폭 (퍼펙트 부착 ±15% — 롱라이드 꼬리 유지)
     JIT_Q: 0.18,        // 품질 나쁠수록 지터 확대 (최대 ±33%) — 대충 붙으면 카오스
     SLIP_RATE: 0.35,    // 저품질 미끄덩 기본 확률/s (×(1-q)×경과 가중)
+    // 롤 방향 확률 샘플링 — 한쪽 고정 방지, 지그재그 라이드
+    ROLL_MOMENTUM: 0.12,   // 직전 롤 방향 관성 가중
+    ROLL_HP_BIAS: 0.25,    // 좌우 잔여 HP 비대칭 가중 (약한 쪽으로)
+    CURVE_BIAS: 30,        // driftX → 방향 가중 환산 (커브 초반 지배)
+    CURVE_ROLL_DECAY: 0.55, // 롤 한 번마다 커브 편향 감쇠 (1~2롤 후 자유)
   };
 
   function bell(r) {
@@ -343,22 +348,22 @@ window.ST = window.ST || {};
       let px = 0, py = 0;
       support.forEach((p) => { const w = pointWorld(st, p.def); px += w.x; py += w.y; });
       px /= support.length; py /= support.length;
-      // 방향: ①의도적 커브(강한 스핀) 고정 ②남은 패드 HP 비대칭 — 약한 쪽으로 넘어감
-      // (충격 기하 계수가 만든 좌우 차가 여기서 크롤 서사로 이어진다) ③박빙이면 랜덤
-      let dir;
-      if (st.driftX > 0.006) dir = 1;
-      else if (st.driftX < -0.006) dir = -1;
-      else {
-        let lh = 0, rh = 0;
-        support.forEach((p) => {
-          const w = pointWorld(st, p.def);
-          if (w.x < st.x - 0.01) lh += p.hp;
-          else if (w.x > st.x + 0.01) rh += p.hp;
-        });
-        const tot = lh + rh;
-        if (tot > 0.01 && Math.abs(lh - rh) / tot > 0.12) dir = lh < rh ? -1 : 1;
-        else dir = Math.random() < 0.5 ? 1 : -1;
-      }
+      // 방향: 매 롤 확률 샘플링 — 커브 편향(롤마다 감쇠) + 좌우 HP 비대칭(약한 쪽)
+      // + 직전 방향 관성. 클램프 [0.15,0.85]라 한쪽 영구 고정이 없고 지그재그가 나온다.
+      let bias = Math.max(-0.35, Math.min(0.35, st.driftX * V2.CURVE_BIAS));
+      let lh = 0, rh = 0;
+      support.forEach((p) => {
+        const w = pointWorld(st, p.def);
+        if (w.x < st.x - 0.01) lh += p.hp;
+        else if (w.x > st.x + 0.01) rh += p.hp;
+      });
+      const tot = lh + rh;
+      if (tot > 0.01) bias += ((lh - rh) / tot) * V2.ROLL_HP_BIAS; // 약한 쪽(-작은 합)으로
+      if (st.lastRollDir) bias += st.lastRollDir * V2.ROLL_MOMENTUM;
+      const pRight = Math.max(0.15, Math.min(0.85, 0.5 + bias));
+      const dir = Math.random() < pRight ? 1 : -1;
+      st.lastRollDir = dir;
+      st.driftX *= V2.CURVE_ROLL_DECAY; // 커브 지배력은 초반 1~2롤로 제한
       st.roll = {
         pivot: { x: px, y: py },
         pivotIds: support.map((p) => p.id),
