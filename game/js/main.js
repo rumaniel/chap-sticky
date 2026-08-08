@@ -802,11 +802,16 @@ window.ST = window.ST || {};
       const I = ST.Input;
       const B = this.gaugeBand;
       if (!B) return;
-      let sp = null, alpha = 1;
-      // 스핀 중 라이브 게이지는 "도는 속도"를 읽어 오해 유발 → 숨김 (던진 직후 잔상은 유지)
-      if (this.state === 'aim' && I.holding && !this._spinActive()) sp = I.liveSpeed;
-      else if (this._lastGauge) { sp = this._lastGauge.speed; alpha = Math.min(1, this._lastGauge.t / 0.45); }
-      if (sp == null) return;
+      let sp = null, alpha = 1, resting = false;
+      if (this.state === 'aim' && I.holding) {
+        // 스핀 중 라이브 값은 "도는 속도"라 오해 유발 → 틀·존은 유지하고 바늘만 쉼
+        if (this._spinActive()) resting = true;
+        else sp = I.liveSpeed;
+      } else if (this._lastGauge) {
+        sp = this._lastGauge.speed;
+        alpha = Math.min(1, this._lastGauge.t / 0.45);
+      }
+      if (sp == null && !resting) return;
 
       const x = 24, w = 12, y1 = 700, hh = 260;
       const yAt = (v) => y1 - hh * Math.max(0, Math.min(1, v / B.max));
@@ -825,18 +830,30 @@ window.ST = window.ST || {};
       ctx.strokeStyle = '#c7f77a';
       ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(x - 5, ys); ctx.lineTo(x + w + 5, ys); ctx.stroke();
-      const yc = yAt(sp);
-      const over = sp > B.limit;
-      // 얇은 내부 채움 — 존 색을 가리지 않게
-      ctx.fillStyle = over ? 'rgba(255,190,190,0.9)' : 'rgba(255,255,255,0.85)';
-      ctx.fillRect(x + 4, yc, w - 8, y1 - yc);
-      ctx.fillStyle = over ? '#ff8a8a' : sp >= B.min ? '#fff' : 'rgba(255,255,255,0.55)';
-      ctx.beginPath();
-      ctx.moveTo(x + w + 3, yc);
-      ctx.lineTo(x + w + 12, yc - 6);
-      ctx.lineTo(x + w + 12, yc + 6);
-      ctx.closePath();
-      ctx.fill();
+      if (resting) {
+        // 쉼 상태: 바닥에 속 빈 마커 — "측정 대기, 릴리즈 플릭이 세기 결정"
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x + w + 3, y1);
+        ctx.lineTo(x + w + 12, y1 - 6);
+        ctx.lineTo(x + w + 12, y1 + 6);
+        ctx.closePath();
+        ctx.stroke();
+      } else {
+        const yc = yAt(sp);
+        const over = sp > B.limit;
+        // 얇은 내부 채움 — 존 색을 가리지 않게
+        ctx.fillStyle = over ? 'rgba(255,190,190,0.9)' : 'rgba(255,255,255,0.85)';
+        ctx.fillRect(x + 4, yc, w - 8, y1 - yc);
+        ctx.fillStyle = over ? '#ff8a8a' : sp >= B.min ? '#fff' : 'rgba(255,255,255,0.55)';
+        ctx.beginPath();
+        ctx.moveTo(x + w + 3, yc);
+        ctx.lineTo(x + w + 12, yc - 6);
+        ctx.lineTo(x + w + 12, yc + 6);
+        ctx.closePath();
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
     },
 
