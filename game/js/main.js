@@ -10,7 +10,10 @@ window.ST = window.ST || {};
 
   // ---------------- 뷰포트 (레터박스 contain) ----------------
   function resize() {
-    const vw = window.innerWidth, vh = window.innerHeight;
+    // visualViewport: 모바일 주소창/줌 변동까지 반영된 실제 가시 영역
+    const vv = window.visualViewport;
+    const vw = vv ? Math.round(vv.width) : window.innerWidth;
+    const vh = vv ? Math.round(vv.height) : window.innerHeight;
     const scale = Math.min(vw / ST.view.w, vh / ST.view.h);
     const cw = Math.round(ST.view.w * scale), chh = Math.round(ST.view.h * scale);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -31,6 +34,7 @@ window.ST = window.ST || {};
   }
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 
   // ---------------- 게임 오브젝트 ----------------
   const REST = { x: 240, y: 672 };
