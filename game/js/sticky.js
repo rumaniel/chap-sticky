@@ -24,17 +24,18 @@ window.ST = window.ST || {};
   const V2 = {
     PADK: 6.0,          // 패드 감쇠 배율
     LOAD_TOP: 0.85,     // 위쪽 패드 하중 가중 (대체로 위부터 벗겨지되 예외 허용)
-    JUICE0: 0.55, JUICE_Q: 0.75, // 주스 초기치 = JUICE0 + JUICE_Q×품질그립
-    JUICE_COST: 0.16,   // 재부착당 주스 소모
-    JUICE_VELCOST: 0.03,
+    // 주스 = 크롤 수명. 품질 비중을 키워 "잘 던지면 바닥까지 라이드" 가능하게
+    JUICE0: 0.45, JUICE_Q: 1.0,  // 초기치 = JUICE0 + JUICE_Q×품질그립
+    JUICE_COST: 0.11,   // 재부착당 주스 소모 (롤 상한 ~6-8회)
+    JUICE_VELCOST: 0.02,
     JUICE_WEAK: 0.22,   // 이하로는 재부착 약화
     JUICE_FAIL: 0.09,   // 이하는 재부착 실패
     RESTICK_HP: 1.45,   // 재부착 HP 배율 — 플립 후에도 확실히 버티게
-    TOPPLE_RATIO: 0.25, // 지지 HP가 초기 대비 이 비율 미만이면 topple
+    TOPPLE_RATIO: 0.35, // 지지 HP가 초기 대비 이 비율 미만이면 topple (빠른 템포)
     TORQUE_STRESS: 1.35,
     ROLL_L: TOY_R * 1.15,
     ROLL_NUDGE: 0.14,   // 초기 기울기(rad)
-    ROLL_CONTACT: TOY_R * 0.25, // 재접촉 판정: 자유 패드가 피벗보다 이만큼 아래
+    ROLL_CONTACT: TOY_R * 0.75, // 재접촉 판정 깊이 — 완전한 끝넘기(~π)와 회당 ~0.28m 하강
     ROLL_MAXPHI: Math.PI * 1.5,
     SETTLE: 0.35,
   };
@@ -251,8 +252,14 @@ window.ST = window.ST || {};
       }
 
       if (left.length === 1) {
-        // 마지막 패드 → 진자 스윙 낙하
-        this._startPeel(st, ev, 0.05, true);
+        // 마지막 패드: 아래 지지면 1점 topple 롤로 체인 연장 (바닥 라이드 핵심),
+        // 위에 매달린 상태면 진자 스윙 낙하
+        const wy = pointWorld(st, left[0].def).y;
+        if (wy < st.y - 0.01 && st.juice > V2.JUICE_FAIL) {
+          if (left[0].hp / left[0].hp0 < V2.TOPPLE_RATIO) this._startRoll(st, ev, left);
+        } else {
+          this._startPeel(st, ev, 0.05, true);
+        }
         return ev;
       }
 
@@ -319,16 +326,12 @@ window.ST = window.ST || {};
       st.angle += a;
       st.x += st.driftX * dt * 30;
 
-      // 완료 = 기하학적 재접촉: 회전 중 자유 패드가 피벗 아래에 도달하는 순간 착지.
-      // 새 지지가 닿으면 멈추는 실제 물리 — 피벗 위로 넘어가는 상승 궤도 원천 차단.
-      let complete = R.phi >= V2.ROLL_MAXPHI;
-      if (!complete && R.phi >= (R.step || Math.PI) * 0.45) {
-        for (const p of st.pads) {
-          if (p.stuck) continue; // 피벗(남은 부착 패드)은 제외
-          const wp = pointWorld(st, p.def);
-          if (wp.y < R.pivot.y - V2.ROLL_CONTACT) { complete = true; break; }
-        }
-      }
+      // 완료 = 완전한 topple: 규정 스텝을 돌고 무게중심이 피벗 아래로 넘어간 순간 착지.
+      // 중심이 피벗 위에 있는 동안은 계속 굴러감 → 상승 궤도 불가 + 회당 하강 극대화.
+      const relX = st.x - R.pivot.x, relY = st.y - R.pivot.y;
+      const relL = Math.hypot(relX, relY) || 0.01;
+      let complete = R.phi >= V2.ROLL_MAXPHI ||
+        (R.phi >= (R.step || Math.PI) && relY < -0.35 * relL);
       if (complete) {
         // 롤 완료: 피벗 패드 해제, 새 아래쪽 패드 재부착 시도
         const vel = R.vel;

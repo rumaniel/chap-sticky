@@ -94,7 +94,7 @@ window.ST = window.ST || {};
     // ============ 칠판 ============
     chalk: {
       id: 'chalk', name: '교실 칠판', desc: '착착 붙는다 · 오래 버티기 명당', unlock: 0,
-      mat: { grip: 1.3, decay: 0.032, flipPeriod: 1.4, slideStep: 0.85, slideCont: 0, bounce: 0.42 },
+      mat: { grip: 1.3, decay: 0.042, flipPeriod: 1.4, slideStep: 0.85, slideCont: 0, bounce: 0.42 },
       skyColor: '#4a3b2a', floorColor: ['#8a7355', '#5f4d36'],
       // 나무 테두리 = 그립 없음, 칠판 안쪽만 유효
       zone: { x0: 0.045, y0: 0.045, x1: 0.955, y1: 0.94 },
