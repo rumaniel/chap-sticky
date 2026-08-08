@@ -83,7 +83,7 @@ window.ST = window.ST || {};
     // ============ 찐득맨 (기본) ============
     man: {
       id: 'man', name: '찐득맨', desc: '양손·양발이 끈적', unlock: 0,
-      mass: 1.0, decayMod: 1.0, radius: 0.95,
+      mass: 1.0, decayMod: 1.0, radius: 0.95, rollStep: Math.PI,
       color: '#7ed957', dark: '#48a53c', light: '#c7f77a',
       stickyPoints: [
         { id: 'lh', x: -0.92, y: -0.50, grip: 1.0 },
@@ -139,7 +139,7 @@ window.ST = window.ST || {};
     // ============ 문어 ============
     octo: {
       id: 'octo', name: '문어찐득', desc: '다리 끝 8곳이 끈적', unlock: 5000,
-      mass: 1.1, decayMod: 0.85, radius: 0.95,
+      mass: 1.1, decayMod: 0.85, radius: 0.95, rollStep: Math.PI / 2,
       color: '#e88ac8', dark: '#b45a99', light: '#ffc6ec',
       stickyPoints: (function () {
         const pts = [];
@@ -186,7 +186,7 @@ window.ST = window.ST || {};
     // ============ 별 ============
     star: {
       id: 'star', name: '별찐득', desc: '꼭짓점 5곳이 끈적 · 가볍다', unlock: 15000,
-      mass: 0.8, decayMod: 1.2, radius: 0.95,
+      mass: 0.8, decayMod: 1.2, radius: 0.95, rollStep: (2 * Math.PI) / 5,
       color: '#ffd94f', dark: '#d9a520', light: '#fff3b0',
       stickyPoints: (function () {
         const pts = [];

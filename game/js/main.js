@@ -314,7 +314,7 @@ window.ST = window.ST || {};
     _handleStickyEvents(evs, st, onFall) {
       for (const e of evs) {
         const t = e.type || e;
-        if (t === 'flip') ST.Audio.play('flip');
+        if (t === 'flip' || t === 'roll') ST.Audio.play('flip');
         else if (t === 'land') { ST.Audio.play('land'); ST.FX.addShake(2); this._dustAt(st, 4); }
         else if (t === 'slip') ST.Audio.play('slip');
         else if (t === 'peelstart') ST.Audio.play('peel');
@@ -545,7 +545,7 @@ window.ST = window.ST || {};
           ctx.rotate(m.fall ? m.fall.rot : m.st.angle);
           this.shape.draw(ctx, S, m.fall
             ? { wob: 1, t: this.time + m.player, mood: 'dizzy' }
-            : { wob: m.st.wob, t: this.time + m.player, squash: m.st.squash, mood: m.st.mood, contacts: m.st.contacts });
+            : { wob: m.st.wob, t: this.time + m.player, squash: m.st.squash, mood: m.st.mood, contacts: ST.Sticky.displayContacts(m.st, this.time) });
           ctx.restore();
           // 플레이어 색 링 + 이름표
           ctx.strokeStyle = m.color;
@@ -574,7 +574,7 @@ window.ST = window.ST || {};
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(st.angle);
-        this.shape.draw(ctx, S, { wob: st.wob, t: this.time, squash: st.squash, mood: st.mood, contacts: st.contacts });
+        this.shape.draw(ctx, S, { wob: st.wob, t: this.time, squash: st.squash, mood: st.mood, contacts: ST.Sticky.displayContacts(st, this.time) });
         ctx.restore();
         // 그립 게이지
         this._drawGrip(p.x, p.y - S - 16, st.gh);
