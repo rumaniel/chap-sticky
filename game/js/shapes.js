@@ -190,7 +190,7 @@ window.ST = window.ST || {};
     // ============ 별 ============
     star: {
       id: 'star', name: '별찐득', desc: '꼭짓점 5곳이 끈적 · 가볍다', unlock: 15000,
-      mass: 0.8, decayMod: 1.2, radius: 0.95, rollStep: (2 * Math.PI) / 5,
+      mass: 0.8, decayMod: 1.2, juiceMod: 1.12, radius: 0.95, rollStep: (2 * Math.PI) / 5,
       color: '#ffd94f', dark: '#d9a520', light: '#fff3b0',
       stickyPoints: (function () {
         const pts = [];

@@ -38,6 +38,12 @@ window.ST = window.ST || {};
     ROLL_CONTACT: TOY_R * 0.75, // 재접촉 판정 깊이 — 완전한 끝넘기(~π)와 회당 ~0.28m 하강
     ROLL_MAXPHI: Math.PI * 1.5,
     SETTLE: 0.35,
+    // 크롤 다이나믹스 — 던지기 개성이 크롤 서사로 이어지게
+    GEO_ALIGN: 0.22,    // 접선 진행 방향 쪽 패드 눌림(강) / 반대쪽 스침(약) 계수
+    GEO_SPIN: 0.14,     // 커브 스핀 쪽 사이드 비틀림 약화 계수
+    JIT_BASE: 0.15,     // 패드 HP 지터 최소폭 (퍼펙트 부착 ±15% — 롱라이드 꼬리 유지)
+    JIT_Q: 0.18,        // 품질 나쁠수록 지터 확대 (최대 ±33%) — 대충 붙으면 카오스
+    SLIP_RATE: 0.35,    // 저품질 미끄덩 기본 확률/s (×(1-q)×경과 가중)
   };
 
   function bell(r) {
@@ -82,6 +88,7 @@ window.ST = window.ST || {};
       const contacts = new Set();
       let adhesion = 0;
       let centerMat = ST.Materials.materialAt(map, impact.x, impact.y);
+      const wpos = {};
       shape.stickyPoints.forEach((p) => {
         if (!geo.has(p.id)) return;
         const w = pointWorld(fake, p);
@@ -89,8 +96,31 @@ window.ST = window.ST || {};
         if (m) {
           contacts.add(p.id);
           adhesion += p.grip * m.grip;
+          wpos[p.id] = w;
           if (!centerMat) centerMat = m;
         }
+      });
+
+      // 충격 기하 → 패드별 초기 HP 계수 (결정론적): 가로 미끄러짐 진행 쪽 = 눌림(강),
+      // 반대쪽 = 스침(약), 커브 스핀 도는 쪽 사이드 = 비틀림(약).
+      // 수직 성분은 제외 — 모든 던지기가 위로 스치므로 넣으면 아래 패드 상시 약화 편향.
+      // 가로·스핀은 조준·커브에 따라 던지기마다 달라져 "어느 패드부터 죽는지"가 매판 바뀐다.
+      const geoF = {};
+      const tvx = impact.vx;
+      const sp = impact.spin || 0;
+      const spN = Math.min(1, Math.abs(sp) / 18);
+      contacts.forEach((id) => {
+        const w = wpos[id];
+        const dx = w.x - impact.x;
+        const dmag = Math.hypot(dx, w.y - impact.y) || 1;
+        let f = 1;
+        if (Math.abs(tvx) > 0.25) {
+          f += V2.GEO_ALIGN * (dx / dmag) * Math.sign(tvx) * Math.min(1, Math.abs(tvx) / 1.5);
+        }
+        if (spN > 0.15 && Math.abs(dx) > 0.02) {
+          f -= V2.GEO_SPIN * spN * (Math.sign(dx) === Math.sign(sp) ? 1 : -0.3);
+        }
+        geoF[id] = Math.max(0.72, Math.min(1.28, f));
       });
 
       if (contacts.size === 0 || adhesion < 0.3) {
@@ -111,7 +141,7 @@ window.ST = window.ST || {};
       const gh = Math.max(0.15, (0.42 + 0.58 * q) * (1 - spinPenalty));
 
       return {
-        stuck: true, contacts, adhesion, impulse, speed,
+        stuck: true, contacts, adhesion, impulse, speed, geoF,
         quality: q, gh, perfect: q > 0.9, mat: centerMat || map.mat,
       };
     },
@@ -132,20 +162,31 @@ window.ST = window.ST || {};
         contacts: new Set(),
         pads: [],
       };
-      // 주스: 던지기 품질이 좋을수록 오래 산다 (개체 랜덤 ±7%)
-      st.juiceMax = (V2.JUICE0 + V2.JUICE_Q * res.gh) * (0.9 + Math.random() * 0.2);
+      st.q = res.quality != null ? res.quality : 0.5;
+
+      // 주스: 던지기 품질이 좋을수록 오래 산다 (개체 랜덤 — 품질 나쁠수록 폭 확대)
+      // shape.juiceMod: 모형별 라이드 여력 보정 (별 = 데굴이 정체성 유지)
+      const jm = 0.05 + 0.10 * (1 - st.q);
+      st.juiceMax = (V2.JUICE0 + V2.JUICE_Q * res.gh) * (shape.juiceMod || 1) * (1 - jm + Math.random() * 2 * jm);
       st.juice = st.juiceMax;
       st.gh = 1;
 
-      // 패드 초기화: 접촉 패드만 부착, HP = 품질 × 그 위치 머테리얼
-      // 패드별 랜덤 지터 ±18% — 같은 각도로 붙어도 매번 다른 크롤 전개
+      // 패드 초기화: HP = 품질 × 그 위치 머테리얼 × 충격 기하 계수(geoF) × 지터.
+      // 지터 폭은 품질 연동(퍼펙트 ±10% ~ 슬로피 ±30%) — 잘 붙으면 안정, 대충이면 카오스
+      const jAmp = V2.JIT_BASE + V2.JIT_Q * (1 - st.q);
+      const rjAmp = jAmp * 0.9;
       shape.stickyPoints.forEach((p) => {
         const w = pointWorld(st, p);
         const m = ST.Materials.materialAt(map, w.x, w.y);
         const stuck = res.contacts.has(p.id) && !!m;
-        const jitter = 0.82 + Math.random() * 0.36;
-        const hp = stuck ? Math.min(1.2, (0.55 + 0.7 * res.gh) * m.grip * jitter) : 0;
-        st.pads.push({ id: p.id, def: p, stuck, hp, hp0: Math.max(0.001, hp), rj: 0.86 + Math.random() * 0.28 });
+        const gf = (res.geoF && res.geoF[p.id]) || 1;
+        const jitter = 1 - jAmp + Math.random() * 2 * jAmp;
+        // 캡은 베이스에만 — 지터·기하 계수까지 뭉개면 패드 분산이 사라진다 (경향성 원인)
+        const hp = stuck ? Math.min(1.2, (0.55 + 0.7 * res.gh) * m.grip) * gf * jitter : 0;
+        st.pads.push({
+          id: p.id, def: p, stuck, hp, hp0: Math.max(0.001, hp),
+          rj: 1 - rjAmp + Math.random() * 2 * rjAmp,
+        });
         if (stuck) st.contacts.add(p.id);
       });
       return st;
@@ -200,6 +241,16 @@ window.ST = window.ST || {};
       if (mat.slideCont) {
         st.y -= (mat.slideCont / 300) * dt;
         if (Math.random() < dt * 2.2) ev.push('slip');
+      } else {
+        // 저품질 미끄덩: 대충 붙은 부착은 가끔 찔끔 미끄러진다.
+        // 확률 ∝ (1-품질)×경과 — 이산 사건이라 매판 다른 전개로 읽힌다
+        const prog = Math.min(1, st.holdTime / 6);
+        if (Math.random() < dt * V2.SLIP_RATE * (1 - (st.q || 0.5)) * (0.25 + 0.75 * prog)) {
+          st.y -= 0.03 + Math.random() * 0.03;
+          st.wob = Math.min(1, st.wob + 0.5);
+          st.squash = 1.12;
+          ev.push('slip');
+        }
       }
 
       const stuck = this.stuckPads(st);
@@ -292,8 +343,22 @@ window.ST = window.ST || {};
       let px = 0, py = 0;
       support.forEach((p) => { const w = pointWorld(st, p.def); px += w.x; py += w.y; });
       px /= support.length; py /= support.length;
-      // 의도적 커브(강한 스핀)만 방향 고정 — 플릭에 묻는 미세 스핀은 무시하고 랜덤
-      const dir = st.driftX > 0.006 ? 1 : st.driftX < -0.006 ? -1 : (Math.random() < 0.5 ? 1 : -1);
+      // 방향: ①의도적 커브(강한 스핀) 고정 ②남은 패드 HP 비대칭 — 약한 쪽으로 넘어감
+      // (충격 기하 계수가 만든 좌우 차가 여기서 크롤 서사로 이어진다) ③박빙이면 랜덤
+      let dir;
+      if (st.driftX > 0.006) dir = 1;
+      else if (st.driftX < -0.006) dir = -1;
+      else {
+        let lh = 0, rh = 0;
+        support.forEach((p) => {
+          const w = pointWorld(st, p.def);
+          if (w.x < st.x - 0.01) lh += p.hp;
+          else if (w.x > st.x + 0.01) rh += p.hp;
+        });
+        const tot = lh + rh;
+        if (tot > 0.01 && Math.abs(lh - rh) / tot > 0.12) dir = lh < rh ? -1 : 1;
+        else dir = Math.random() < 0.5 ? 1 : -1;
+      }
       st.roll = {
         pivot: { x: px, y: py },
         pivotIds: support.map((p) => p.id),
