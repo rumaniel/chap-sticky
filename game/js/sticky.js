@@ -24,13 +24,17 @@ window.ST = window.ST || {};
     PADK: 6.0,          // 패드 감쇠 배율
     LOAD_TOP: 1.2,      // 위쪽 패드 하중 가중
     JUICE0: 0.55, JUICE_Q: 0.75, // 주스 초기치 = JUICE0 + JUICE_Q×품질그립
-    JUICE_COST: 0.24,   // 재부착당 주스 소모
+    JUICE_COST: 0.16,   // 재부착당 주스 소모
     JUICE_VELCOST: 0.03,
     JUICE_WEAK: 0.22,   // 이하로는 재부착 약화
     JUICE_FAIL: 0.09,   // 이하는 재부착 실패
-    RESTICK_HP: 1.15,   // 재부착 HP 배율
+    RESTICK_HP: 1.45,   // 재부착 HP 배율 — 플립 후에도 확실히 버티게
+    TOPPLE_RATIO: 0.25, // 지지 HP가 초기 대비 이 비율 미만이면 topple
+    TORQUE_STRESS: 1.35,
     ROLL_L: TOY_R * 1.15,
     ROLL_NUDGE: 0.14,   // 초기 기울기(rad)
+    ROLL_MINDROP: TOY_R * 0.55, // 롤 1회당 최소 하강 보장 (상승 롤 방지)
+    ROLL_MAXPHI: Math.PI * 2.2,
     SETTLE: 0.35,
   };
 
@@ -207,7 +211,7 @@ window.ST = window.ST || {};
       if (stuck.length) {
         // 하중 분배: 무게중심보다 위(장력) 패드가 더 소모.
         // 아래만 지지 = 넘어지려는 토크를 그립이 버팀 → 추가 스트레스
-        const stress = belowOnly ? 1.7 : 1.0;
+        const stress = belowOnly ? V2.TORQUE_STRESS : 1.0;
         let wsum = 0;
         const ws = stuck.map((p) => {
           const w = pointWorld(st, p.def);
@@ -259,7 +263,7 @@ window.ST = window.ST || {};
       });
       if (below2 && !above2) {
         const minRatio = Math.min(...left.map((p) => p.hp / p.hp0));
-        if (minRatio < 0.32) {
+        if (minRatio < V2.TOPPLE_RATIO) {
           this._startRoll(st, ev, left);
           return ev;
         }
@@ -285,6 +289,7 @@ window.ST = window.ST || {};
         pivotIds: support.map((p) => p.id),
         phi: 0, vel: 0, dir,
         step: st.shape.rollStep || Math.PI,
+        y0: st.y, // 하강량 검증 기준
       };
       st.phase = 'roll';
       st.phaseT = 0;
@@ -297,8 +302,7 @@ window.ST = window.ST || {};
       // 역진자: 기울수록 가속 (π/2 이후는 관성 유지)
       const acc = (9.8 / V2.ROLL_L) * Math.sin(Math.min(R.phi + V2.ROLL_NUDGE, Math.PI / 2));
       R.vel += acc * dt;
-      let d = R.vel * dt;
-      if (R.phi + d > R.step) d = R.step - R.phi;
+      let d = Math.min(0.3, R.vel * dt); // 프레임당 회전 상한(안정성)
       R.phi += d;
 
       // 피벗 중심 실제 회전 → 하강이 물리로 발생
@@ -310,7 +314,9 @@ window.ST = window.ST || {};
       st.angle += a;
       st.x += st.driftX * dt * 30;
 
-      if (R.phi >= R.step - 1e-6) {
+      // 완료 조건: 규정 스텝 + 최소 하강 달성 (안 내려갔으면 계속 굴러감 — 상승 롤 방지)
+      const dropped = R.y0 - st.y >= V2.ROLL_MINDROP;
+      if ((R.phi >= R.step - 1e-6 && dropped) || R.phi >= V2.ROLL_MAXPHI) {
         // 롤 완료: 피벗 패드 해제, 새 아래쪽 패드 재부착 시도
         const vel = R.vel;
         st.pads.forEach((p) => {

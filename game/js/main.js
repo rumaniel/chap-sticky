@@ -155,6 +155,7 @@ window.ST = window.ST || {};
       this.impactPos = null;
       this.curMult = 0;
       this.wasStuck = false;
+      this.aimRot = 0;
       const s = ST.Modes.session;
       this.simDefer = !!(s && s.simMode);
       this.hintT = s && s.round === 0 && s.cur === 0 ? 6 : 0;
@@ -185,6 +186,7 @@ window.ST = window.ST || {};
         const T = ST.Physics.TUNE;
         const hw = ST.Physics.unproject(this.toyScreen.x, this.toyScreen.y, T.HOLD_Z);
         this.flight = ST.Physics.makeThrow(flick, spin.vel, hw);
+        this.flight.angle = this.aimRot || 0; // 조준 중 돌린 자세 그대로 비행
         this.state = 'fly';
         this.hintT = 0;
         ST.Audio.play('whoosh');
@@ -202,7 +204,10 @@ window.ST = window.ST || {};
 
       if (this.state === 'aim') {
         ST.Input.tick(dt); // 스핀 멈추면 커브 이펙트 자연 소멸
-        if (!ST.Input.holding) {
+        if (ST.Input.holding) {
+          // 스핀으로 돌아간 각도는 누적 유지 (멈춰도 원상복구하지 않음)
+          this.aimRot += ST.Input.spinVel * dt * 0.55;
+        } else {
           this.toyScreen.x += (REST.x - this.toyScreen.x) * Math.min(1, dt * 10);
           this.toyScreen.y += (REST.y - this.toyScreen.y) * Math.min(1, dt * 10);
         }
@@ -630,8 +635,7 @@ window.ST = window.ST || {};
           ctx.fill();
           ctx.save();
           ctx.translate(t.x, t.y + (ST.Input.holding ? 0 : Math.sin(this.time * 2.2) * 4));
-          const spinRot = ST.Input.holding ? ST.Input.spinCharge * 0.6 : 0;
-          ctx.rotate(spinRot);
+          ctx.rotate(this.aimRot || 0);
           this.shape.draw(ctx, S, { wob: ST.Input.holding ? 0.35 : 0.12, t: this.time, mood: 'happy' });
           ctx.restore();
           // 스핀 인디케이터 — 빠른 이중 호 (텍스트 없음)
