@@ -161,6 +161,7 @@ window.ST = window.ST || {};
       this.curMult = 0;
       this.wasStuck = false;
       this.aimRot = 0;
+      this._spinBlend = 0;
       const s = ST.Modes.session;
       this.simDefer = !!(s && s.simMode);
       this.hintT = s && s.round === 0 && s.cur === 0 ? 6 : 0;
@@ -220,6 +221,9 @@ window.ST = window.ST || {};
 
       if (this.state === 'aim') {
         ST.Input.tick(dt); // 스핀 멈추면 커브 이펙트 자연 소멸
+        // 게이지 직구↔커브 모드 크로스페이드
+        const sbTgt = ST.Input.holding && this._spinActive() ? 1 : 0;
+        this._spinBlend = (this._spinBlend || 0) + (sbTgt - (this._spinBlend || 0)) * Math.min(1, dt * 9);
         if (ST.Input.holding) {
           // 스핀으로 돌아간 각도는 누적 유지 (멈춰도 원상복구하지 않음)
           this.aimRot += ST.Input.spinVel * dt * 0.55;
@@ -797,21 +801,23 @@ window.ST = window.ST || {};
       ctx.globalAlpha = 1;
     },
 
-    // 파워 게이지: 드래그 중 라이브 세기 vs 찹 존(초록)·과속(빨강)·무효(회색) + 스윗 라인
+    /* 파워 게이지. 직구: 세기 vs 찹 존(초록)·과속(빨강)·무효(회색) + 스윗 라인.
+     * 스핀 중: 파란 커브 충전 바로 크로스페이드 변신(_spinBlend) — 커브볼 모드 표현 */
     _drawGaugeUI() {
       const I = ST.Input;
       const B = this.gaugeBand;
       if (!B) return;
-      let sp = null, alpha = 1, resting = false;
-      if (this.state === 'aim' && I.holding) {
-        // 스핀 중 라이브 값은 "도는 속도"라 오해 유발 → 틀·존은 유지하고 바늘만 쉼
-        if (this._spinActive()) resting = true;
-        else sp = I.liveSpeed;
+      const T = ST.Physics.TUNE;
+      const live = this.state === 'aim' && I.holding;
+      let sp = null, alpha = 1;
+      if (live) {
+        if (!this._spinActive()) sp = I.liveSpeed;
       } else if (this._lastGauge) {
         sp = this._lastGauge.speed;
         alpha = Math.min(1, this._lastGauge.t / 0.45);
       }
-      if (sp == null && !resting) return;
+      if (!live && sp == null) return;
+      const blend = live ? (this._spinBlend || 0) : 0;
 
       const x = 24, w = 12, y1 = 700, hh = 260;
       const yAt = (v) => y1 - hh * Math.max(0, Math.min(1, v / B.max));
@@ -820,30 +826,40 @@ window.ST = window.ST || {};
       ctx.beginPath();
       ctx.roundRect(x - 4, y1 - hh - 4, w + 8, hh + 8, 7);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.16)';                    // 무효(너무 약함)
-      ctx.fillRect(x, yAt(B.min), w, y1 - yAt(B.min));
-      ctx.fillStyle = 'rgba(126,217,87,0.5)';                      // 찹 존
-      ctx.fillRect(x, yAt(B.limit), w, yAt(B.min) - yAt(B.limit));
-      ctx.fillStyle = 'rgba(255,120,100,0.5)';                     // 과속(튕김)
-      ctx.fillRect(x, y1 - hh, w, yAt(B.limit) - (y1 - hh));
-      const ys = yAt(B.sweet);
-      ctx.strokeStyle = '#c7f77a';
-      ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(x - 5, ys); ctx.lineTo(x + w + 5, ys); ctx.stroke();
-      if (resting) {
-        // 쉼 상태: 바닥에 속 빈 마커 — "측정 대기, 릴리즈 플릭이 세기 결정"
-        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x + w + 3, y1);
-        ctx.lineTo(x + w + 12, y1 - 6);
-        ctx.lineTo(x + w + 12, y1 + 6);
-        ctx.closePath();
-        ctx.stroke();
-      } else {
+      // 직구 존 — 스핀 모드로 갈수록 흐려짐
+      if (blend < 0.98) {
+        ctx.globalAlpha = alpha * (1 - blend);
+        ctx.fillStyle = 'rgba(255,255,255,0.16)';                  // 무효(너무 약함)
+        ctx.fillRect(x, yAt(B.min), w, y1 - yAt(B.min));
+        ctx.fillStyle = 'rgba(126,217,87,0.5)';                    // 찹 존
+        ctx.fillRect(x, yAt(B.limit), w, yAt(B.min) - yAt(B.limit));
+        ctx.fillStyle = 'rgba(255,120,100,0.5)';                   // 과속(튕김)
+        ctx.fillRect(x, y1 - hh, w, yAt(B.limit) - (y1 - hh));
+        const ys = yAt(B.sweet);
+        ctx.strokeStyle = '#c7f77a';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x - 5, ys); ctx.lineTo(x + w + 5, ys); ctx.stroke();
+      }
+      // 커브볼 모드 — 스핀 세기만큼 차오르는 파란 충전 바 (스핀 호·화살표와 같은 색 언어)
+      if (blend > 0.02) {
+        const norm = Math.min(1, Math.abs(I.spinVel) * T.KSPIN / T.SPIN_MAX);
+        const hf = hh * Math.max(0.05, norm);
+        const yTop = y1 - hf;
+        ctx.globalAlpha = alpha * blend * (0.8 + 0.2 * Math.sin(this.time * 6));
+        const g = ctx.createLinearGradient(0, y1, 0, yTop);
+        g.addColorStop(0, 'rgba(138,214,255,0.25)');
+        g.addColorStop(1, 'rgba(138,214,255,0.85)');
+        ctx.fillStyle = g;
+        ctx.fillRect(x, yTop, w, hf);
+        ctx.strokeStyle = '#cdeeff';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x - 2, yTop); ctx.lineTo(x + w + 2, yTop); ctx.stroke();
+      }
+      // 현재 세기 바늘 (직구 라이브 / 던진 직후 잔상)
+      if (sp != null) {
+        ctx.globalAlpha = alpha;
         const yc = yAt(sp);
         const over = sp > B.limit;
-        // 얇은 내부 채움 — 존 색을 가리지 않게
         ctx.fillStyle = over ? 'rgba(255,190,190,0.9)' : 'rgba(255,255,255,0.85)';
         ctx.fillRect(x + 4, yc, w - 8, y1 - yc);
         ctx.fillStyle = over ? '#ff8a8a' : sp >= B.min ? '#fff' : 'rgba(255,255,255,0.55)';
