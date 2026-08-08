@@ -22,7 +22,7 @@ window.ST = window.ST || {};
   // v2 튜닝 (시뮬로 조정)
   const V2 = {
     PADK: 6.0,          // 패드 감쇠 배율
-    LOAD_TOP: 1.2,      // 위쪽 패드 하중 가중
+    LOAD_TOP: 0.85,     // 위쪽 패드 하중 가중 (대체로 위부터 벗겨지되 예외 허용)
     JUICE0: 0.55, JUICE_Q: 0.75, // 주스 초기치 = JUICE0 + JUICE_Q×품질그립
     JUICE_COST: 0.16,   // 재부착당 주스 소모
     JUICE_VELCOST: 0.03,
@@ -131,7 +131,7 @@ window.ST = window.ST || {};
         pads: [],
       };
       // 주스: 던지기 품질이 좋을수록 오래 산다 (개체 랜덤 ±7%)
-      st.juiceMax = (V2.JUICE0 + V2.JUICE_Q * res.gh) * (0.93 + Math.random() * 0.14);
+      st.juiceMax = (V2.JUICE0 + V2.JUICE_Q * res.gh) * (0.9 + Math.random() * 0.2);
       st.juice = st.juiceMax;
       st.gh = 1;
 
@@ -143,7 +143,7 @@ window.ST = window.ST || {};
         const stuck = res.contacts.has(p.id) && !!m;
         const jitter = 0.82 + Math.random() * 0.36;
         const hp = stuck ? Math.min(1.2, (0.55 + 0.7 * res.gh) * m.grip * jitter) : 0;
-        st.pads.push({ id: p.id, def: p, stuck, hp, hp0: Math.max(0.001, hp) });
+        st.pads.push({ id: p.id, def: p, stuck, hp, hp0: Math.max(0.001, hp), rj: 0.86 + Math.random() * 0.28 });
         if (stuck) st.contacts.add(p.id);
       });
       return st;
@@ -225,7 +225,7 @@ window.ST = window.ST || {};
           const m = ST.Materials.materialAt(st.map, wpos.x, wpos.y);
           if (!m) { p.hp = 0; continue; } // 크롤로 노그립 존 진입
           const share = (load / wsum) * stuck.length; // 평균 1
-          p.hp -= m.decay * st.shape.decayMod * share * stress * V2.PADK * dt;
+          p.hp -= m.decay * st.shape.decayMod * share * stress * V2.PADK * (p.rj || 1) * dt;
         }
       }
 
@@ -284,11 +284,12 @@ window.ST = window.ST || {};
       let px = 0, py = 0;
       support.forEach((p) => { const w = pointWorld(st, p.def); px += w.x; py += w.y; });
       px /= support.length; py /= support.length;
-      const dir = st.driftX > 0.0004 ? 1 : st.driftX < -0.0004 ? -1 : (Math.random() < 0.5 ? 1 : -1);
+      // 의도적 커브(강한 스핀)만 방향 고정 — 플릭에 묻는 미세 스핀은 무시하고 랜덤
+      const dir = st.driftX > 0.006 ? 1 : st.driftX < -0.006 ? -1 : (Math.random() < 0.5 ? 1 : -1);
       st.roll = {
         pivot: { x: px, y: py },
         pivotIds: support.map((p) => p.id),
-        phi: 0, vel: 0, dir,
+        phi: 0, vel: Math.random() * 0.6, dir,
         step: st.shape.rollStep || Math.PI,
       };
       st.phase = 'roll';
@@ -346,11 +347,12 @@ window.ST = window.ST || {};
             const w = pointWorld(st, p.def);
             const m = ST.Materials.materialAt(st.map, w.x, w.y);
             if (!m) continue;
-            let hp = st.juice * V2.RESTICK_HP * m.grip * (0.85 + Math.random() * 0.3);
+            let hp = st.juice * V2.RESTICK_HP * m.grip * (0.78 + Math.random() * 0.5);
             if (st.juice < V2.JUICE_WEAK) hp *= 0.45;
             p.stuck = true;
             p.hp = Math.min(1.2, hp);
             p.hp0 = Math.max(0.001, p.hp);
+            p.rj = 0.86 + Math.random() * 0.28;
             st.contacts.add(p.id);
             stickN++;
           }
