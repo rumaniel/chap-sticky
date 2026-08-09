@@ -250,6 +250,7 @@ window.ST = window.ST || {};
       this.wasStuck = false;
       this.aimRot = 0;
       this._spinBlend = 0;
+      this._idleT = 0;
       const s = ST.Modes.session;
       this.simDefer = !!(s && s.simMode);
       this.hintT = s && s.round === 0 && s.cur === 0 ? 6 : 0;
@@ -309,6 +310,9 @@ window.ST = window.ST || {};
 
       if (this.state === 'aim') {
         ST.Input.tick(dt); // 스핀 멈추면 커브 이펙트 자연 소멸
+        // 무입력 아이들 — 6초 지나면 고스트 손 재등장 (잡으면 리셋)
+        if (ST.Input.holding) this._idleT = 0;
+        else this._idleT = (this._idleT || 0) + dt;
         // 게이지 직구↔커브 모드 크로스페이드
         const sbTgt = ST.Input.holding && this._spinActive() ? 1 : 0;
         this._spinBlend = (this._spinBlend || 0) + (sbTgt - (this._spinBlend || 0)) * Math.min(1, dt * 9);
@@ -772,7 +776,7 @@ window.ST = window.ST || {};
               // 원형 드래그 중엔 속도 벡터가 회전해 예측이 무의미 → 커브 힌트로 대체
               if (this._spinActive()) this._drawCurveHint(t.x, t.y, S);
               else this._drawTraj();
-            } else if (this._ghostOn) this._drawGhost();
+            } else if (this._ghostOn || (this._idleT || 0) > 6) this._drawGhost();
           }
         }
       }
