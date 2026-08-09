@@ -336,14 +336,17 @@ c.setFillColor(YELL)
 c.setFont('MalgunB', 10.5)
 c.drawString(M + 5 * mm, y - 7 * mm, '기술 스펙')
 sy = y - 13 * mm
-for ln in [
-    '렌더링: HTML5 Canvas 2D, 가상 480×800 레터박스, DPR 대응 | 사운드: WebAudio 신스(저작권 클린)',
-    '물리: 자체 구현 — 포사체·Magnus 커브·패드 그립 HP·토크 롤·진자 필오프 | 저장: localStorage',
-    '코드: 순수 JS 11모듈 약 3,400줄, 빌드 과정 없음 | 저장소: github.com/rumaniel/chap-sticky (공개)',
+for lab, ln in [
+    ('렌더링', 'HTML5 Canvas 2D, 가상 480×800 레터박스, DPR 대응  |  사운드: WebAudio 신스(저작권 클린)'),
+    ('물리', '자체 구현 — 포사체·Magnus 커브·패드 그립 HP·토크 롤·진자 필오프  |  저장: localStorage'),
+    ('코드', '순수 JS 11모듈 약 3,400줄, 빌드 과정 없음  |  저장소: github.com/rumaniel/chap-sticky (공개)'),
 ]:
+    c.setFillColor(SOFT)
+    c.setFont('MalgunB', 9)
+    c.drawString(M + 5 * mm, sy, lab)
     c.setFillColor(INK)
     c.setFont('Malgun', 9)
-    c.drawString(M + 5 * mm, sy, ln)
+    c.drawString(M + 20 * mm, sy, ln)
     sy -= 5.6 * mm
 
 c.showPage()
