@@ -430,19 +430,49 @@ y = body(y, [
     '- 모형·맵이 레지스트리 정의라 신규 콘텐츠 추가 비용 극소 → 콘텐츠가 곧 광고 인벤토리, 주 단위 확장',
 ], size=9.8, leading=5.4)
 
-y -= 2 * mm
+y -= 9 * mm
 y = h2(y, '로드맵')
-y = body(y, [
-    '**단기 (공모전 이후 1~2개월) — 언락 경제 완성',
-    '- 리워드 광고 SDK 연동, 신규 모형(도마뱀·햄스터)·맵(욕실 타일, 편의점 냉장고) 추가',
-    '- 일일 도전(고정 시드 경쟁) · 묘기 배지(3커브 연속 등) — 광고 리롤과 맞물리는 반복 동기',
-    '',
-    '**중기 — 커뮤니티·확장',
-    '- 글로벌 리더보드(서버리스), SNS 리플레이 공유(GIF), 파티 동시 크롤의 P2P 온라인 확장',
-    '',
-    '**협업·현장',
-    '- 행사 키오스크 모드(설치 0 · 태블릿 1대 8인 파티) · 실물 찐득이 완구 콜라보(게임 코드 동봉)',
-], size=9.8, leading=5.4)
+
+# 3단계 타임라인 플로우
+STAGES = [
+    ('단기 · 1~2개월', '언락 경제 완성', ACCENT, [
+        '리워드 광고 SDK 연동',
+        '신규 모형·맵 추가 (도마뱀·욕실 타일)',
+        '일일 도전(고정 시드) · 묘기 배지',
+    ]),
+    ('중기', '커뮤니티 · 확장', YELL, [
+        '글로벌 리더보드 (서버리스)',
+        'SNS 리플레이 공유 (GIF 내보내기)',
+        '파티 동시 크롤의 P2P 온라인화',
+    ]),
+    ('상시 · 협업', '현장 · 파트너십', SOFT, [
+        '행사 키오스크 모드 (설치 0)',
+        '실물 찐득이 완구 콜라보',
+        '(패키지에 게임 코드 동봉)',
+    ]),
+]
+cw, gapc = 54 * mm, 8 * mm
+stY = y - 7 * mm
+for i, (t1, t2, col, items) in enumerate(STAGES):
+    x0 = M + i * (cw + gapc)
+    c.setFillColor(col)
+    c.roundRect(x0, stY - 13 * mm, cw, 13 * mm, 2.5 * mm, stroke=0, fill=1)
+    c.setFillColor(colors.white)
+    c.setFont('MalgunB', 10)
+    c.drawCentredString(x0 + cw / 2, stY - 5.2 * mm, t1)
+    c.setFont('Malgun', 8)
+    c.drawCentredString(x0 + cw / 2, stY - 10 * mm, t2)
+    if i < 2:
+        arrow(x0 + cw + 1 * mm, stY - 6.5 * mm, x0 + cw + gapc - 1 * mm, stY - 6.5 * mm, SOFT)
+    yy = stY - 19 * mm
+    for it in items:
+        c.setFillColor(ACCENT)
+        c.circle(x0 + 2.5 * mm, yy + 1 * mm, 0.7 * mm, stroke=0, fill=1)
+        c.setFillColor(INK)
+        c.setFont('Malgun', 8.3)
+        c.drawString(x0 + 5 * mm, yy, it)
+        yy -= 4.9 * mm
+y = stY - 36 * mm
 
 # 마무리 박스
 c.setFillColor(ACCENT)
