@@ -161,7 +161,8 @@ window.ST = window.ST || {};
         t: 0, holdTime: 0,
         phase: 'settle', phaseT: 0,
         driftX: (impact.spin || 0) * 0.0012,
-        wob: 1.0, squash: 0.5, sqV: 0, // 충돌 순간 팬케이크 → 스프링 젤리 바운스
+        // 충돌 팬케이크 — 충격 속도 비례 (살살 0.68 ~ 강타 0.53), 스프링이 젤리 바운스로 복원
+        wob: 1.0, squash: Math.max(0.53, Math.min(0.68, 0.78 - (impact.vz || 6) * 0.025)), sqV: 0,
 
         mood: 'happy',
         peel: null, roll: null,
