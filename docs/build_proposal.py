@@ -178,11 +178,12 @@ y = body(y, [
 ], size=9.8, leading=5.4)
 
 iw2 = 58 * mm
-gap = (W - 2 * M - 2 * iw2)
-ib1 = img('itch_s3_curve.png', M, y - 2 * mm, iw2)
-caption(M, ib1, iw2, '커브볼 모드 — 게이지 변신과 꺾임 예고 화살표')
-ib2 = img('03-stuck-crawl-chalk.png', M + iw2 + gap, y - 2 * mm, iw2)
-caption(M + iw2 + gap, ib2, iw2, '부착·크롤 — 그립 게이지와 실시간 가점')
+gap = 12 * mm
+sx = M + ((W - 2 * M) - (2 * iw2 + gap)) / 2  # 중앙 정렬 클러스터
+ib1 = img('itch_s3_curve.png', sx, y - 8 * mm, iw2)
+caption(sx, ib1, iw2, '커브볼 모드 — 게이지 변신과 꺾임 예고 화살표')
+ib2 = img('03-stuck-crawl-chalk.png', sx + iw2 + gap, y - 8 * mm, iw2)
+caption(sx + iw2 + gap, ib2, iw2, '부착·크롤 — 그립 게이지와 실시간 가점')
 
 c.showPage()
 
@@ -208,13 +209,13 @@ y = body(y, [
     '- 누적 점수로 모형·맵 해금 → 반복 플레이 동기',
 ], size=9.8, leading=5.4)
 
-ib3 = img('04-party-simul-room.png', M, y - 2 * mm, iw2)
-caption(M, ib3, iw2, '파티 동시 크롤 — 3인 실시간 대결')
-ib4 = img('pdf_b_fridge_star.png', M + iw2 + gap, y - 2 * mm, iw2)
-caption(M + iw2 + gap, ib4, iw2, '냉장고 맵 — 자석 스팟과 노그립 손잡이')
+ib3 = img('04-party-simul-room.png', sx, y - 6 * mm, iw2)
+caption(sx, ib3, iw2, '파티 동시 크롤 — 3인 실시간 대결')
+ib4 = img('pdf_b_fridge_star.png', sx + iw2 + gap, y - 6 * mm, iw2)
+caption(sx + iw2 + gap, ib4, iw2, '냉장고 맵 — 자석 스팟과 노그립 손잡이')
 
 # ---- 해금 로드 (하단 여백 활용) — 언락 경제 시각화, 5p 수익 모델의 복선
-ry = ib3 - 22 * mm
+ry = ib3 - 19 * mm
 c.setFont('MalgunB', 11)
 c.setFillColor(INK)
 c.drawString(M, ry, '해금 로드 — 쌓인 점수가 새 물리 조합을 연다')
