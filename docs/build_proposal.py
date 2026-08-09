@@ -146,7 +146,7 @@ intro_y = body(intro_y, [
     '커브를 걸지 — 전부 손끝 하나로.',
     '',
     '**심사 포인트 요약',
-    '- 유사 사례 없는 오리지널 소재·물리 루프',
+    '- 추억의 완구를 물리 루프로 되살린 오리지널 소재',
     '- 의존성 0, 더블클릭 즉시 실행되는 초경량 빌드',
     '- 그립 주도 크롤 물리 (타이머 연출이 아님)',
     '- 파티 동시 크롤 등 현장 시연형 멀티 모드',
@@ -214,6 +214,47 @@ caption(M, ib3, iw2, '파티 동시 크롤 — 3인 실시간 대결')
 ib4 = img('pdf_b_fridge_star.png', M + iw2 + gap, y - 2 * mm, iw2)
 caption(M + iw2 + gap, ib4, iw2, '냉장고 맵 — 자석 스팟과 노그립 손잡이')
 
+# ---- 해금 로드 (하단 여백 활용) — 언락 경제 시각화, 5p 수익 모델의 복선
+ry = ib3 - 14 * mm
+c.setFont('MalgunB', 11)
+c.setFillColor(INK)
+c.drawString(M, ry, '해금 로드 — 쌓인 점수가 새 물리 조합을 연다')
+ry -= 8 * mm
+trackY = ry
+c.setStrokeColor(colors.HexColor('#cfc6e8'))
+c.setLineWidth(2.5)
+c.line(M + 4 * mm, trackY, W - M - 46 * mm, trackY)
+NODES = [
+    ('시작', '칠판·거실·찐득맨', ACCENT),
+    ('3,000', '유리창', YELL),
+    ('5,000', '문어찐득', YELL),
+    ('12,000', '냉장고', YELL),
+    ('15,000', '별찐득', YELL),
+]
+span = (W - M - 46 * mm) - (M + 4 * mm)
+NODES_N = len(NODES)
+for i, (pts, label, col) in enumerate(NODES):
+    nx = M + 4 * mm + span * (i / (NODES_N - 1))
+    c.setFillColor(col)
+    c.circle(nx, trackY, 2.6 * mm, stroke=0, fill=1)
+    c.setFillColor(colors.white)
+    c.circle(nx, trackY, 1.1 * mm, stroke=0, fill=1)
+    c.setFont('MalgunB', 8.5)
+    c.setFillColor(INK)
+    c.drawCentredString(nx, trackY + 4.5 * mm, pts)
+    c.setFont('Malgun', 8)
+    c.setFillColor(SOFT)
+    c.drawCentredString(nx, trackY - 7 * mm, label)
+# 차기: 광고 즉시 해금 태그
+tagX = W - M - 40 * mm
+c.setFillColor(PANEL)
+c.roundRect(tagX, trackY - 5 * mm, 40 * mm, 11 * mm, 2.5 * mm, stroke=0, fill=1)
+c.setFont('MalgunB', 8.5)
+c.setFillColor(YELL)
+c.drawCentredString(tagX + 20 * mm, trackY + 1.2 * mm, '차기: 광고 시청')
+c.setFillColor(INK)
+c.drawCentredString(tagX + 20 * mm, trackY - 3 * mm, '= 즉시 해금')
+
 c.showPage()
 
 # ============================================================ P4 심사기준 대응
@@ -245,7 +286,7 @@ crit = [
     ]),
     ('발전 가능성', [
         '데이터 주도 설계: 모형(끈적 패드)·맵(머테리얼 존) 레지스트리에 정의만 추가하면 확장',
-        'P2P 온라인 멀티 설계 완료(5p) · 행사 키오스크 모드 등 사업화 경로 명확',
+        '리워드 광고 기반 맵·캐릭터 언락 모델 설계(5p) — 무료 유지 + 콘텐츠 = 수익 인벤토리',
     ]),
 ]
 for name, lines in crit:
@@ -261,6 +302,32 @@ for name, lines in crit:
         c.drawString(M + 30 * mm, yy - 2.2 * mm, '· ' + ln)
         yy -= 5.4 * mm
     y = yy - 4.5 * mm
+
+# 자동 시뮬 실측 발췌 (게임 완성도 근거 실증)
+c.setFillColor(INK)
+c.setFont('MalgunB', 10.5)
+c.drawString(M, y - 6 * mm, '자동 시뮬레이션 실측 (발췌)')
+c.setFont('Malgun', 8)
+c.setFillColor(SOFT)
+c.drawString(M + 58 * mm, y - 6 * mm, '모형×맵 조합별 헤드리스 프레임 추적 — 밸런스 회귀 검증에 사용')
+ty2 = y - 12 * mm
+c.setFont('MalgunB', 8.5)
+c.setFillColor(YELL)
+for cx, t in [(M + 2 * mm, '조합 (양질 던지기)'), (M + 52 * mm, '부착률'), (M + 74 * mm, '평균 홀드'), (M + 102 * mm, '바닥 라이드 도달')]:
+    c.drawString(cx, ty2, t)
+ty2 -= 5.5 * mm
+c.setFillColor(INK)
+c.setFont('Malgun', 8.5)
+for row in [
+    ('찐득맨 × 칠판', '18/18', '10.2~10.6s', '0% (붙박이 명당)'),
+    ('찐득맨 × 거실', '50/50', '8.3~8.8s', '55~75% (지그재그 라이드)'),
+    ('문어찐득 × 칠판', '6/6', '13.0s', '0% (최장 홀드)'),
+    ('별찐득 × 거실', '28/28', '8.3~9.9s', '~21% (데굴데굴 꼬리 사건)'),
+]:
+    for cx, t in zip([M + 2 * mm, M + 52 * mm, M + 74 * mm, M + 102 * mm], row):
+        c.drawString(cx, ty2, t)
+    ty2 -= 5 * mm
+y = ty2 - 2 * mm
 
 # 기술 스펙 박스
 c.setFillColor(PANEL)
@@ -281,37 +348,96 @@ for ln in [
 
 c.showPage()
 
-# ============================================================ P5 로드맵
-header(5, '로드맵 · 발전 가능성')
+# ============================================================ P5 수익 모델·로드맵
+header(5, '수익 모델 · 로드맵')
 y = H - 20 * mm
-y = h2(y, '모드 3: 온라인 멀티플레이 (설계 완료 · 차기 버전)')
+y = h2(y, '수익 모델 — 광고가 여는 콘텐츠 언락 루프')
 
+
+def arrow(x1, y1, x2, y2, col):
+    c.setStrokeColor(col)
+    c.setLineWidth(1.6)
+    c.line(x1, y1, x2, y2)
+    ang = 0.42
+    import math
+    a = math.atan2(y2 - y1, x2 - x1)
+    L = 2.6 * mm
+    c.setFillColor(col)
+    p = c.beginPath()
+    p.moveTo(x2, y2)
+    p.lineTo(x2 - L * math.cos(a - ang), y2 - L * math.sin(a - ang))
+    p.lineTo(x2 - L * math.cos(a + ang), y2 - L * math.sin(a + ang))
+    p.close()
+    c.drawPath(p, stroke=0, fill=1)
+
+
+def node(x, yc, w, h, title, sub, fill, tcol):
+    c.setFillColor(fill)
+    c.roundRect(x, yc - h / 2, w, h, 2.5 * mm, stroke=0, fill=1)
+    c.setFillColor(tcol)
+    c.setFont('MalgunB', 10)
+    if sub:
+        c.drawCentredString(x + w / 2, yc + 0.8 * mm, title)
+        c.setFont('Malgun', 7.8)
+        c.drawCentredString(x + w / 2, yc - 3.6 * mm, sub)
+    else:
+        c.drawCentredString(x + w / 2, yc - 1.6 * mm, title)
+
+
+# 순환 루프: 플레이 → 점수 → 언락 → 새 물리 조합 → (다시 플레이)
+loopY = y - 22 * mm
+bw, bh, gapx = 38 * mm, 14 * mm, 8.7 * mm
+bx = M
+LOOP = [
+    ('플레이', '던지고 붙이고 버틴다'),
+    ('점수 적립', '버티기 × 과녁 배율'),
+    ('맵·캐릭터 언락', '새 벽 · 새 끈적 패드'),
+    ('새 물리 조합', '전략·크롤 리듬 변화'),
+]
+for i, (t, s) in enumerate(LOOP):
+    x0 = bx + i * (bw + gapx)
+    node(x0, loopY, bw, bh, t, s, PANEL if i != 2 else ACCENT, INK if i != 2 else colors.white)
+    if i < 3:
+        arrow(x0 + bw + 0.8 * mm, loopY, x0 + bw + gapx - 0.8 * mm, loopY, SOFT)
+# 순환 화살표 (아래로 돌아감)
+retY = loopY - bh / 2 - 6 * mm
+c.setStrokeColor(SOFT)
+c.setLineWidth(1.6)
+c.line(bx + 3 * (bw + gapx) + bw / 2, loopY - bh / 2, bx + 3 * (bw + gapx) + bw / 2, retY)
+c.line(bx + 3 * (bw + gapx) + bw / 2, retY, bx + bw / 2, retY)
+arrow(bx + bw / 2, retY, bx + bw / 2, loopY - bh / 2 - 1 * mm, SOFT)
+# 리워드 광고 분기 — 언락으로 직행
+adX = bx + 1 * (bw + gapx) + bw + gapx / 2 - 21 * mm
+adY = loopY + bh / 2 + 9 * mm
+c.setFillColor(YELL)
+c.roundRect(adX, adY - 5.5 * mm, 42 * mm, 11 * mm, 2.5 * mm, stroke=0, fill=1)
+c.setFillColor(colors.white)
+c.setFont('MalgunB', 9.5)
+c.drawCentredString(adX + 21 * mm, adY + 0.6 * mm, '리워드 광고 시청')
+c.setFont('Malgun', 7.8)
+c.drawCentredString(adX + 21 * mm, adY - 3.8 * mm, '기다림 없이 즉시 언락')
+arrow(adX + 34 * mm, adY - 5.5 * mm, bx + 2 * (bw + gapx) + bw * 0.45, loopY + bh / 2 + 1 * mm, YELL)
+
+y = retY - 8 * mm
 y = body(y, [
-    '- 방식: WebRTC(PeerJS) P2P — 호스트 브라우저가 방장, 별도 게임 서버 없는 서버리스 구조',
-    '- 흐름: 호스트가 초대 코드 생성 → 참가자 접속 → 각자 기기에서 던지기 → 착지 파라미터만 동기화',
-    '- 동기화 데이터가 초소형(착지 좌표·속도·스핀)이라 저지연 — 크롤은 각 기기에서 동일 시드로 재생',
-    '- 이미 구현된 "파티 동시 크롤" 연출을 온라인으로 그대로 확장하는 구조',
+    '- 코어 루프는 이미 구현·검증: 누적 점수 해금(무료 2맵 → 유리 3,000 → 문어 5,000 → 냉장고 12,000 → 별 15,000)',
+    '- 확장 = 리워드 광고: 점수를 모으거나, 광고 1편으로 즉시 해금 — 하이퍼캐주얼에서 검증된 무과금 친화 모델',
+    '- 게임 전체 무료 유지: 광고는 강제 노출 없이 유저가 선택(언락·부스터) — 파티 현장에서도 흐름 안 끊김',
+    '- 모형·맵이 레지스트리 정의라 신규 콘텐츠 추가 비용 극소 → 콘텐츠가 곧 광고 인벤토리, 주 단위 확장',
 ], size=9.8, leading=5.4)
 
 y -= 2 * mm
-y = h2(y, '콘텐츠 · 사업화 로드맵')
+y = h2(y, '로드맵')
 y = body(y, [
-    '**단기 (공모전 이후 1~2개월)',
-    '- 신규 모형(도마뱀·햄스터 등)·맵(욕실 타일, 편의점 냉장고) — 레지스트리에 정의 추가만으로 확장',
-    '- 일일 도전(고정 시드 경쟁) · 묘기 배지(3커브 연속 등) · 효과음/BGM 확장',
+    '**단기 (공모전 이후 1~2개월) — 언락 경제 완성',
+    '- 리워드 광고 SDK 연동, 신규 모형(도마뱀·햄스터)·맵(욕실 타일, 편의점 냉장고) 추가',
+    '- 일일 도전(고정 시드 경쟁) · 묘기 배지(3커브 연속 등) — 광고 리롤과 맞물리는 반복 동기',
     '',
-    '**중기 — 온라인·커뮤니티',
-    '- 모드 3 P2P 멀티 출시, 주간 리그 · 관전 모드',
-    '- 글로벌 리더보드(서버리스 백엔드), SNS 리플레이 공유(GIF 내보내기)',
+    '**중기 — 커뮤니티·확장',
+    '- 글로벌 리더보드(서버리스), SNS 리플레이 공유(GIF), 파티 동시 크롤의 P2P 온라인 확장',
     '',
-    '**사업화',
-    '- 하이퍼캐주얼 광고 모델 + 스킨/맵 패스 — 초경량 웹 게임이라 메신저·포털 게임 채널 입점 용이',
-    '- 찐득이 완구 콜라보: 실물 완구 패키지에 게임 코드 동봉 (추억 세대 + 키즈 동시 공략)',
-    '- 행사 키오스크 모드: 설치 0 · 태블릿 1대로 8인 파티 — 축제/행사 현장 시연에 최적',
-    '',
-    '**지역 연계',
-    '- 경북게임페스티벌 등 현장 부스 시연: 브라우저만 있으면 즉시 구동, 관객 참여형 파티 모드',
-    '- 지역 소재 맵(경산 벽화거리 등) 업데이트로 로컬 콘텐츠 연계 가능',
+    '**협업·현장',
+    '- 행사 키오스크 모드(설치 0 · 태블릿 1대 8인 파티) · 실물 찐득이 완구 콜라보(게임 코드 동봉)',
 ], size=9.8, leading=5.4)
 
 # 마무리 박스
