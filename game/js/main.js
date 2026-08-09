@@ -132,22 +132,109 @@ window.ST = window.ST || {};
         const p = toPx(w.x, w.y);
         const rad = w.r * wpm;
         c.beginPath();
-        c.fillStyle = 'rgba(186,120,255,0.28)';
+        c.fillStyle = 'rgba(186,120,255,0.42)';
         c.arc(p.x, p.y, rad, 0, Math.PI * 2);
         c.fill();
         c.setLineDash([6, 5]);
-        c.strokeStyle = 'rgba(255,255,255,0.85)';
-        c.lineWidth = 3;
+        c.strokeStyle = 'rgba(255,255,255,0.95)';
+        c.lineWidth = 3.5;
         c.stroke();
         c.setLineDash([]);
-        c.font = '700 ' + Math.round(rad * 0.8) + 'px sans-serif';
-        c.fillStyle = 'rgba(255,255,255,0.95)';
-        c.fillText(sp.icon, p.x, p.y + rad * 0.28);
+        this._spotIcon(c, sp.icon, p.x, p.y, rad);
         c.font = '700 ' + Math.round(rad * 0.5) + 'px sans-serif';
+        c.textAlign = 'center';
+        c.fillStyle = 'rgba(255,255,255,0.95)';
         c.fillText('+' + sp.bonus, p.x, p.y + rad + 14);
       });
 
       this.wallCache = cv;
+    },
+
+    /* 보너스 스팟 아이콘 — 무테 벡터 (캐릭터와 동일한 소프트 스타일). 칠판 텍스트는 분필 낙서 유지 */
+    _spotIcon(c, icon, x, y, rad) {
+      const s = rad * 0.62;
+      c.save();
+      c.translate(x, y);
+      c.lineCap = c.lineJoin = 'round';
+      if (icon === '★') {
+        c.fillStyle = 'rgba(255,255,255,0.95)';
+        c.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const a = -Math.PI / 2 + (i * Math.PI) / 5;
+          const r = (i % 2 === 0 ? 1 : 0.45) * s;
+          i === 0 ? c.moveTo(Math.cos(a) * r, Math.sin(a) * r) : c.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        c.closePath();
+        c.fill();
+      } else if (icon === '☀') {
+        c.strokeStyle = 'rgba(255,255,255,0.95)';
+        c.lineWidth = s * 0.22;
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          c.beginPath();
+          c.moveTo(Math.cos(a) * s * 0.62, Math.sin(a) * s * 0.62);
+          c.lineTo(Math.cos(a) * s * 0.95, Math.sin(a) * s * 0.95);
+          c.stroke();
+        }
+        c.fillStyle = 'rgba(255,255,255,0.95)';
+        c.beginPath(); c.arc(0, 0, s * 0.42, 0, Math.PI * 2); c.fill();
+      } else if (icon === '🐦') {
+        c.fillStyle = 'rgba(255,255,255,0.95)';
+        c.beginPath(); c.ellipse(s * 0.08, s * 0.12, s * 0.62, s * 0.48, 0, 0, Math.PI * 2); c.fill(); // 몸통
+        c.beginPath(); c.arc(-s * 0.42, -s * 0.3, s * 0.34, 0, Math.PI * 2); c.fill();               // 머리
+        c.fillStyle = '#ffb84f';                                                                      // 부리
+        c.beginPath();
+        c.moveTo(-s * 0.7, -s * 0.34); c.lineTo(-s * 0.98, -s * 0.22); c.lineTo(-s * 0.66, -s * 0.14);
+        c.closePath(); c.fill();
+        c.fillStyle = 'rgba(186,120,255,0.9)';                                                        // 날개
+        c.beginPath(); c.ellipse(s * 0.18, s * 0.05, s * 0.3, s * 0.2, -0.35, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#2d3f4a';                                                                      // 눈
+        c.beginPath(); c.arc(-s * 0.5, -s * 0.36, s * 0.06, 0, Math.PI * 2); c.fill();
+      } else if (icon === '🧲') {
+        c.strokeStyle = '#ff8a8a';
+        c.lineWidth = s * 0.4;
+        c.beginPath();
+        c.arc(0, -s * 0.12, s * 0.5, Math.PI, 0);          // U 아치 (다리 아래로)
+        c.moveTo(-s * 0.5, -s * 0.12); c.lineTo(-s * 0.5, s * 0.42);
+        c.moveTo(s * 0.5, -s * 0.12); c.lineTo(s * 0.5, s * 0.42);
+        c.stroke();
+        c.fillStyle = 'rgba(255,255,255,0.95)';            // 흰 팁
+        c.beginPath(); c.roundRect(-s * 0.72, s * 0.42, s * 0.44, s * 0.3, s * 0.08); c.fill();
+        c.beginPath(); c.roundRect(s * 0.28, s * 0.42, s * 0.44, s * 0.3, s * 0.08); c.fill();
+      } else {
+        c.font = '700 ' + Math.round(rad * 0.8) + 'px sans-serif';
+        c.textAlign = 'center';
+        c.fillStyle = 'rgba(255,255,255,0.95)';
+        c.fillText(icon, 0, rad * 0.28);
+      }
+      c.restore();
+    },
+
+    /* 접착 자국 — 벽 캐시에 영구 스탬프 (턴 넘어도 누적). k = 진하기 배율 */
+    _stainWall(wx, wy, shape, k) {
+      const cv = this.wallCache;
+      if (!cv) return;
+      const T = ST.Physics.TUNE;
+      const c = cv.getContext('2d');
+      const px = ((wx + T.WALL_W / 2) / T.WALL_W) * cv.width;
+      const py = ((T.WALL_BOTTOM + T.WALL_H - wy) / T.WALL_H) * cv.height;
+      const R = ST.Sticky.TOY_R * (cv.width / T.WALL_W) * 0.72;
+      c.save();
+      c.fillStyle = shape.color;
+      c.globalAlpha = 0.13 * k;
+      c.beginPath();
+      c.ellipse(px, py, R, R * 0.9, 0, 0, Math.PI * 2);
+      c.fill();
+      // 튄 방울들
+      c.globalAlpha = 0.11 * k;
+      for (let i = 0; i < 5; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = R * (0.85 + Math.random() * 0.55);
+        c.beginPath();
+        c.arc(px + Math.cos(a) * d, py + Math.sin(a) * d, R * (0.1 + Math.random() * 0.14), 0, Math.PI * 2);
+        c.fill();
+      }
+      c.restore();
     },
 
     startTurn(label, color) {
@@ -372,6 +459,7 @@ window.ST = window.ST || {};
         const p = ST.Physics.project(res.x, res.y, T.WALL_Z);
         if (r.stuck) {
           this.impactPos = { x: res.x, y: res.y };
+          this._stainWall(res.x, res.y, shape, 1);
           ST.Score.onStick(this.ts, r, res, map);
           ST.Audio.play('splat');
           if (r.perfect) ST.Audio.play('perfect');
@@ -396,6 +484,7 @@ window.ST = window.ST || {};
           }
         } else if (r.reason === 'nogrip') {
           // 그립 없는 존 → 툭 치고 낙하
+          this._stainWall(res.x, res.y, shape, 0.4);
           ST.Audio.play('pop');
           ST.Audio.play('sadDrop');
           ST.FX.burst(p.x, p.y, 8, { color: '#ccc', speed: 90, size: 4, life: 0.35 });
@@ -404,6 +493,7 @@ window.ST = window.ST || {};
           this.state = 'fall';
         } else {
           // 너무 세다 → 튕겨나감
+          this._stainWall(res.x, res.y, shape, 0.4);
           this.state = 'bounceoff';
           this.bounceAnim = {
             x: res.x, y: res.y, z: T.WALL_Z,
@@ -647,7 +737,7 @@ window.ST = window.ST || {};
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(f.angle);
-        this.shape.draw(ctx, S, { wob: 0.3, t: this.time, mood: 'excited' });
+        this.shape.draw(ctx, S, { wob: 0.3, t: this.time, mood: 'excited', squash: 1.08 });
         ctx.restore();
       } else if (this.state === 'aim' || this.state === 'idle' || this.state === 'done') {
         if (this.shape && this.state !== 'done') {

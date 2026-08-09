@@ -161,7 +161,8 @@ window.ST = window.ST || {};
         t: 0, holdTime: 0,
         phase: 'settle', phaseT: 0,
         driftX: (impact.spin || 0) * 0.0012,
-        wob: 1.0, squash: 1.35,
+        wob: 1.0, squash: 0.5, sqV: 0, // 충돌 순간 팬케이크 → 스프링 젤리 바운스
+
         mood: 'happy',
         peel: null, roll: null,
         contacts: new Set(),
@@ -216,7 +217,10 @@ window.ST = window.ST || {};
       st.phaseT += dt;
 
       st.wob = Math.max(0, st.wob - dt * 2.2);
-      st.squash += (1 - st.squash) * Math.min(1, dt * 10);
+      // 스쿼시 = 감쇠 스프링 (오버슈트 젤리 바운스). slip/land이 즉시값 세팅해도 자연 복원
+      st.sqV = (st.sqV || 0) + (1 - st.squash) * 170 * dt;
+      st.sqV *= Math.exp(-dt * 6);
+      st.squash += st.sqV * dt;
       st.gh = Math.max(0, st.juice / st.juiceMax);
 
       if (st.phase === 'peel') {
@@ -441,7 +445,7 @@ window.ST = window.ST || {};
         st.phase = 'hold';
         st.phaseT = 0;
         st.wob = 0.85;
-        st.squash = 1.16;
+        st.squash = 0.7; // 착지 = 눌림 (스프링이 복원)
         ev.push('land');
         // 착지 직후 하단/노그립 즉시 판정
         const T2 = ST.Physics.TUNE;

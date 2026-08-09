@@ -37,6 +37,30 @@ window.ST = window.ST || {};
             ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
           }
         }
+        // 액자 (우상 — 과녁·스팟 회피 위치)
+        const fx = W * 0.80, fy = H * 0.115, fw = W * 0.13, fh = H * 0.105;
+        ctx.fillStyle = '#b98a5f';
+        ctx.beginPath();
+        ctx.roundRect(fx - fw / 2 - 6, fy - fh / 2 - 6, fw + 12, fh + 12, 6);
+        ctx.fill();
+        ctx.fillStyle = '#fdf6e3';
+        ctx.fillRect(fx - fw / 2, fy - fh / 2, fw, fh);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(fx - fw / 2, fy - fh / 2, fw, fh);
+        ctx.clip();
+        ctx.fillStyle = '#a8d878'; // 언덕
+        ctx.beginPath(); ctx.arc(fx - fw * 0.18, fy + fh * 0.62, fw * 0.36, Math.PI, 0); ctx.fill();
+        ctx.beginPath(); ctx.arc(fx + fw * 0.3, fy + fh * 0.66, fw * 0.3, Math.PI, 0); ctx.fill();
+        ctx.fillStyle = '#ffd94f'; // 해
+        ctx.beginPath(); ctx.arc(fx + fw * 0.26, fy - fh * 0.18, fw * 0.11, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        // 전등 스위치 (좌하)
+        const sx = W * 0.085, sy = H * 0.76;
+        ctx.fillStyle = '#e2d5b8';
+        ctx.beginPath(); ctx.roundRect(sx - 13, sy - 20, 26, 40, 6); ctx.fill();
+        ctx.fillStyle = '#c0a878';
+        ctx.beginPath(); ctx.roundRect(sx - 5, sy - 11, 10, 22, 4); ctx.fill();
         // 걸레받이
         ctx.fillStyle = '#c9b28a';
         ctx.fillRect(0, H - 14, W, 14);
