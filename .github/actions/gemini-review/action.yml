@@ -19,6 +19,10 @@ inputs:
     description: Gemini CLI 디버그 로그
     required: false
     default: 'false'
+  upload_artifacts:
+    description: Gemini CLI stdout/stderr 를 워크플로 아티팩트로 올린다 (진단용)
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -32,6 +36,7 @@ runs:
         gemini_api_key: ${{ inputs.gemini_api_key }}
         gemini_model: ${{ inputs.model }}
         gemini_debug: ${{ inputs.debug }}
+        upload_artifacts: ${{ inputs.upload_artifacts }}
         workflow_name: gemini-review
         github_pr_number: ${{ inputs.pr_number }}
         # 리뷰 코멘트는 github-mcp-server 를 통해 단다. core 툴은 끄고

@@ -52,6 +52,7 @@ jobs:
           pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
           model: ${{ vars.GEMINI_MODEL }}
           debug: ${{ vars.GEMINI_DEBUG || 'false' }}
+          upload_artifacts: ${{ vars.UPLOAD_ARTIFACTS || 'false' }}
 
       - name: Backoff
         if: steps.try1.outcome == 'failure'
@@ -68,6 +69,7 @@ jobs:
           pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
           model: ${{ vars.GEMINI_MODEL }}
           debug: ${{ vars.GEMINI_DEBUG || 'false' }}
+          upload_artifacts: ${{ vars.UPLOAD_ARTIFACTS || 'false' }}
 
       - name: Backoff
         if: steps.try1.outcome == 'failure' && steps.try2.outcome == 'failure'
@@ -83,3 +85,4 @@ jobs:
           pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
           model: ${{ vars.GEMINI_MODEL }}
           debug: ${{ vars.GEMINI_DEBUG || 'false' }}
+          upload_artifacts: ${{ vars.UPLOAD_ARTIFACTS || 'false' }}
