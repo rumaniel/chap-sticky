@@ -28,7 +28,7 @@ jobs:
        github.event.issue.pull_request != null &&
        contains(github.event.comment.body, '/gemini review'))
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
       issues: write
@@ -36,46 +36,50 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
 
-      - name: Run Gemini review
-        uses: google-github-actions/run-gemini-cli@v0
-        env:
-          GEMINI_CLI_TRUST_WORKSPACE: 'true'
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # Gemini API 는 과부하 시 503 UNAVAILABLE 을 돌려준다. 설정 문제가 아니라
+      # 일시 장애이므로 간격을 두고 두 번 더 시도한다.
+      - name: Review (1/3)
+        id: try1
+        continue-on-error: true
+        uses: ./.github/actions/gemini-review
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          # 모델은 repo variable 로 뺀다. 미설정 시 액션 기본값을 쓴다.
-          gemini_model: ${{ vars.GEMINI_MODEL }}
-          gemini_debug: ${{ fromJSON(vars.GEMINI_DEBUG || false) }}
-          workflow_name: gemini-review
-          github_pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
-          settings: |-
-            {
-              "model": { "maxSessionTurns": 25 },
-              "mcpServers": {
-                "github": {
-                  "command": "docker",
-                  "args": [
-                    "run", "-i", "--rm",
-                    "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
-                    "ghcr.io/github/github-mcp-server:v0.27.0"
-                  ],
-                  "includeTools": [
-                    "add_comment_to_pending_review",
-                    "pull_request_read",
-                    "pull_request_review_write"
-                  ],
-                  "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
-                }
-              },
-              "tools": { "core": [] }
-            }
-          extensions: |
-            [
-              "https://github.com/gemini-cli-extensions/code-review"
-            ]
-          prompt: '/pr-code-review'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          model: ${{ vars.GEMINI_MODEL }}
+          debug: ${{ vars.GEMINI_DEBUG || 'false' }}
+
+      - name: Backoff
+        if: steps.try1.outcome == 'failure'
+        run: sleep 45
+
+      - name: Review (2/3)
+        id: try2
+        if: steps.try1.outcome == 'failure'
+        continue-on-error: true
+        uses: ./.github/actions/gemini-review
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          model: ${{ vars.GEMINI_MODEL }}
+          debug: ${{ vars.GEMINI_DEBUG || 'false' }}
+
+      - name: Backoff
+        if: steps.try1.outcome == 'failure' && steps.try2.outcome == 'failure'
+        run: sleep 90
+
+      # 마지막 시도는 continue-on-error 없이 — 여기서 실패하면 체크도 빨간불.
+      - name: Review (3/3)
+        if: steps.try1.outcome == 'failure' && steps.try2.outcome == 'failure'
+        uses: ./.github/actions/gemini-review
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          model: ${{ vars.GEMINI_MODEL }}
+          debug: ${{ vars.GEMINI_DEBUG || 'false' }}

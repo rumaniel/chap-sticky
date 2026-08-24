@@ -1,0 +1,64 @@
+name: Gemini review
+description: Gemini CLI 로 PR 을 리뷰하고 인라인 코멘트를 단다.
+
+inputs:
+  gemini_api_key:
+    description: Google AI Studio API key
+    required: true
+  github_token:
+    description: PR 코멘트를 달 토큰
+    required: true
+  pr_number:
+    description: 리뷰할 PR 번호
+    required: true
+  model:
+    description: 모델 ID (비우면 CLI 기본값)
+    required: false
+    default: ''
+  debug:
+    description: Gemini CLI 디버그 로그
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - uses: google-github-actions/run-gemini-cli@v0
+      env:
+        GEMINI_CLI_TRUST_WORKSPACE: 'true'
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
+      with:
+        gemini_api_key: ${{ inputs.gemini_api_key }}
+        gemini_model: ${{ inputs.model }}
+        gemini_debug: ${{ inputs.debug }}
+        workflow_name: gemini-review
+        github_pr_number: ${{ inputs.pr_number }}
+        # 리뷰 코멘트는 github-mcp-server 를 통해 단다. core 툴은 끄고
+        # 필요한 3개만 열어 모델이 저장소를 건드리지 못하게 한다.
+        settings: |-
+          {
+            "model": { "maxSessionTurns": 25 },
+            "mcpServers": {
+              "github": {
+                "command": "docker",
+                "args": [
+                  "run", "-i", "--rm",
+                  "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+                  "ghcr.io/github/github-mcp-server:v0.27.0"
+                ],
+                "includeTools": [
+                  "add_comment_to_pending_review",
+                  "pull_request_read",
+                  "pull_request_review_write"
+                ],
+                "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
+              }
+            },
+            "tools": { "core": [] }
+          }
+        extensions: |
+          [
+            "https://github.com/gemini-cli-extensions/code-review"
+          ]
+        prompt: '/pr-code-review'
