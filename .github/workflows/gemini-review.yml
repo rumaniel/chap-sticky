@@ -1,0 +1,81 @@
+name: Gemini PR Review
+
+# 두 경로로 동작한다.
+#   1) PR 생성/갱신 시 자동 리뷰
+#   2) PR 코멘트에 "/gemini review" 를 남기면 온디맨드 재리뷰
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: gemini-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  review:
+    name: Review
+    # fork PR 은 secrets 가 주입되지 않아 반드시 실패한다. 아예 돌리지 않는다.
+    if: >-
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '/gemini review'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Gemini review
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          # 모델은 repo variable 로 뺀다. 미설정 시 액션 기본값을 쓴다.
+          gemini_model: ${{ vars.GEMINI_MODEL }}
+          gemini_debug: ${{ fromJSON(vars.GEMINI_DEBUG || false) }}
+          workflow_name: gemini-review
+          github_pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          settings: |-
+            {
+              "model": { "maxSessionTurns": 25 },
+              "mcpServers": {
+                "github": {
+                  "command": "docker",
+                  "args": [
+                    "run", "-i", "--rm",
+                    "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+                    "ghcr.io/github/github-mcp-server:v0.27.0"
+                  ],
+                  "includeTools": [
+                    "add_comment_to_pending_review",
+                    "pull_request_read",
+                    "pull_request_review_write"
+                  ],
+                  "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
+                }
+              },
+              "tools": { "core": [] }
+            }
+          extensions: |
+            [
+              "https://github.com/gemini-cli-extensions/code-review"
+            ]
+          prompt: '/pr-code-review'
