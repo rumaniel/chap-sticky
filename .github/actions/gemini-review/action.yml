@@ -67,3 +67,20 @@ runs:
             "https://github.com/gemini-cli-extensions/code-review"
           ]
         prompt: '/pr-code-review'
+
+    # CLI 는 모델이 툴 호출에 실패해도 exit 0 으로 끝난다. stdout JSON 의
+    # error 필드를 봐야 진짜 성공인지 알 수 있다. 여기서 실패로 바꿔야
+    # 워크플로의 재시도가 걸린다.
+    - name: Detect CLI error
+      shell: bash
+      run: |
+        f=gemini-artifacts/stdout.log
+        if [[ ! -f "$f" ]]; then
+          echo "::error title=Gemini::stdout.log 이 없다 — CLI 가 실행되지 않았다"
+          exit 1
+        fi
+        if jq -e 'has("error")' "$f" >/dev/null 2>&1; then
+          echo "::error title=Gemini CLI error::$(jq -c '.error' "$f")"
+          exit 1
+        fi
+        echo "리뷰 정상 종료"
