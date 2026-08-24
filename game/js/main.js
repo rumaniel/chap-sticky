@@ -9,11 +9,18 @@ window.ST = window.ST || {};
   ST.view = { w: 480, h: 800, cx: 240, scale: 1 };
 
   // ---------------- 뷰포트 (레터박스 contain) ----------------
+  const wrap = document.getElementById('wrap');
   function resize() {
-    // visualViewport: 모바일 주소창/줌 변동까지 반영된 실제 가시 영역
+    // #wrap 은 safe-area-inset 만큼 물러나 있다. 그 실측 박스를 기준으로 잡으면
+    // 노치·제스처바를 자동으로 피한다. visualViewport 는 주소창/줌 변동 폴백.
     const vv = window.visualViewport;
-    const vw = vv ? Math.round(vv.width) : window.innerWidth;
-    const vh = vv ? Math.round(vv.height) : window.innerHeight;
+    const box = wrap ? wrap.getBoundingClientRect() : null;
+    const vw = box && box.width > 0
+      ? Math.round(box.width)
+      : (vv ? Math.round(vv.width) : window.innerWidth);
+    const vh = box && box.height > 0
+      ? Math.round(box.height)
+      : (vv ? Math.round(vv.height) : window.innerHeight);
     const scale = Math.min(vw / ST.view.w, vh / ST.view.h);
     const cw = Math.round(ST.view.w * scale), chh = Math.round(ST.view.h * scale);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -36,6 +43,17 @@ window.ST = window.ST || {};
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 100));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+
+  // 백그라운드 진입 시 오디오를 재운다. rAF 는 알아서 멈추지만 AudioContext 는 아니다.
+  // 복귀할 때 last 를 다시 찍어 첫 프레임의 dt 점프를 없앤다.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      ST.Audio.suspend();
+    } else {
+      ST.Audio.resume();
+      last = performance.now();
+    }
+  });
 
   // ---------------- 게임 오브젝트 ----------------
   const REST = { x: 240, y: 672 };
@@ -65,6 +83,17 @@ window.ST = window.ST || {};
       this._simulDone = false;
       ST.FX.clear();
       ST.Score.clearFloaters();
+    },
+
+    /* 라운드를 버리고 중립 상태로 되돌린다 (Android 뒤로가기 -> 타이틀).
+     * setup()이 비행·부착·애니메이션을 지우므로 여기서는 남는 표시 상태만 턴다. */
+    abortToIdle() {
+      this.banner = null;
+      this.ts = null;
+      this.hintT = 0;
+      this.endT = 0;
+      this.curMult = 0;
+      this.setup('man', 'room');
     },
 
     buildWallCache() {

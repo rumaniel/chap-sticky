@@ -145,6 +145,18 @@ window.ST = window.ST || {};
         bgmTimer = setInterval(bgmStep, 2400);
       }
     },
+    /* 백그라운드 진입. setInterval 은 스로틀만 될 뿐 멈추지 않고 AudioContext 도
+     * 계속 울린다. 컨텍스트를 재우고 BGM 타이머까지 끊어야 소리가 완전히 멎는다. */
+    suspend() {
+      if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; }
+      if (ctx && ctx.state === 'running') ctx.suspend();
+    },
+    /* 첫 터치 전(ctx 없음)이면 아무것도 하지 않는다 — unlock()이 처리한다. */
+    resume() {
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      if (!bgmTimer) bgmTimer = setInterval(bgmStep, 2400);
+    },
     get muted() { return muted; },
     toggleMute() {
       muted = !muted;

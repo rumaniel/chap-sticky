@@ -126,6 +126,13 @@ window.ST = window.ST || {};
       setTimeout(() => ST.UI.showResult(s), 700);
     },
 
+    /* 진행 중인 라운드를 중단하고 타이틀로 (Android 뒤로가기) */
+    toTitle() {
+      session = null;
+      ST.Game.abortToIdle();
+      ST.UI.show('scr-title');
+    },
+
     retry() {
       if (!session) return;
       if (session.mode === 'practice') this.startPractice(session.shapeId, session.mapId, session.throwsPer);

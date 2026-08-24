@@ -20,6 +20,8 @@ window.ST = window.ST || {};
       'btn.retry': '🔄 한판 더',
       'btn.menu': '메뉴로',
       'btn.save': '기록 저장',
+      'back.toMenu': '한 번 더 누르면 메뉴로 나갑니다',
+      'back.exit': '한 번 더 누르면 게임을 종료합니다',
       'common.on': 'ON',
       'common.off': 'OFF',
 
@@ -96,6 +98,8 @@ window.ST = window.ST || {};
       'btn.retry': '🔄 One More',
       'btn.menu': 'Menu',
       'btn.save': 'Save Score',
+      'back.toMenu': 'Press back again to quit to the menu',
+      'back.exit': 'Press back again to exit',
       'common.on': 'ON',
       'common.off': 'OFF',
 
