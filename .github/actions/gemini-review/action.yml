@@ -39,8 +39,10 @@ runs:
         upload_artifacts: ${{ inputs.upload_artifacts }}
         workflow_name: gemini-review
         github_pr_number: ${{ inputs.pr_number }}
-        # 리뷰 코멘트는 github-mcp-server 를 통해 단다. core 툴은 끄고
-        # 필요한 3개만 열어 모델이 저장소를 건드리지 못하게 한다.
+        # 리뷰 코멘트는 github-mcp-server 를 통해 단다. GitHub 쪽 권한은
+        # 3개 툴로 좁힌다. core 툴은 끄지 않는다 — 끄면 code-review 확장이
+        # 스킬을 로드하지 못해 모델이 툴을 한 번도 부르지 못한다.
+        # 러너는 일회용이고 checkout 은 persist-credentials: false 다.
         settings: |-
           {
             "model": { "maxSessionTurns": 25 },
@@ -59,8 +61,7 @@ runs:
                 ],
                 "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
               }
-            },
-            "tools": { "core": [] }
+            }
           }
         extensions: |
           [
