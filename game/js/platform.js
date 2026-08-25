@@ -15,6 +15,16 @@ window.ST = window.ST || {};
 
   ST.native = true;
 
+  // 스플래시는 첫 프레임이 실제로 그려진 뒤 내린다 — 로딩 중인 빈 캔버스가
+  // 노출되지 않는다. config 의 launchAutoHide(2초)가 안전망이라 여기서
+  // 실패해도 스플래시가 영영 남지는 않는다.
+  const Splash = cap.Plugins.SplashScreen;
+  if (Splash) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { Splash.hide({ fadeOutDuration: 250 }); });
+    });
+  }
+
   // 하드웨어 뒤로가기. UI.back() 이 false 를 주면 더 올라갈 화면이 없다는 뜻이라
   // 그때만 앱을 닫는다. (타이틀에서 두 번 눌러야 false 가 나온다)
   App.addListener('backButton', function () {
