@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1180" role="img" aria-labelledby="title desc">
+  <title id="title">MANGRU watchtower logo</title>
+  <desc id="desc">The MANGRU watchtower icon with an all-caps MANGRU wordmark.</desc>
+
+  <defs>
+    <!-- The M is transparent, letting the lockup work on any background. -->
+    <mask id="m-cutout" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <path fill="#000" d="M356 548l156 146 156-146v286h-70V688l-86 82-86-82v146h-70z"/>
+    </mask>
+  </defs>
+
+  <g mask="url(#m-cutout)">
+    <path fill="#4E176E" d="M300 132h78v76h78v-76h112v76h78v-76h78v342l86 360H602V650l-90 86-90-86v184H214l86-360z"/>
+    <path fill="#22B8D1" d="M444 300h136v44H444z"/>
+  </g>
+
+  <text x="512" y="1030" text-anchor="middle" fill="#4E176E"
+        font-family="Montserrat, Arial, Helvetica, sans-serif" font-size="118"
+        font-weight="800" letter-spacing="12">MANGRU</text>
+</svg>
