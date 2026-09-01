@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">찹! 찐득이</string>
+    <string name="title_activity_main">찹! 찐득이</string>
+    <string name="package_name">com.mangru.chapsticky</string>
+    <string name="custom_url_scheme">com.mangru.chapsticky</string>
+</resources>

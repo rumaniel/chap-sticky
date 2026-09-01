@@ -1,3 +1,10 @@
 __pycache__/
 *.zip
 submission/
+
+node_modules/
+
+# 서명 키 — 절대 커밋 금지 (base64 로 GitHub Secrets 에만 둔다)
+*.jks
+*.keystore
+key.properties

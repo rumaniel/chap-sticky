@@ -1,0 +1,8 @@
+{
+  "appId": "com.mangru.chapsticky",
+  "appName": "찹! 찐득이",
+  "webDir": "game",
+  "android": {
+    "backgroundColor": "#1a1530"
+  }
+}

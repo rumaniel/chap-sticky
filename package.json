@@ -1,0 +1,28 @@
+{
+  "name": "chap-sticky",
+  "version": "1.0.0",
+  "private": true,
+  "description": "찹! 찐득이 — 벽에 던져 붙이고 버티는 물리 미니게임 (순수 JS + Canvas)",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rumaniel/chap-sticky.git"
+  },
+  "homepage": "https://rumaniel.itch.io/splat-sticky",
+  "scripts": {
+    "sync": "cap sync android",
+    "open:android": "cap open android"
+  },
+  "volta": {
+    "node": "24.19.0",
+    "npm": "11.19.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0"
+  }
+}
