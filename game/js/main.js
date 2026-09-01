@@ -853,17 +853,27 @@ window.ST = window.ST || {};
     },
 
     /* 게이지 밴드: 현재 모형×맵에서 "붙는 세기" 구간을 플릭 속도(px/ms)로 환산.
-     * 전패드 접촉 가정, 접선 성분은 평균 몫(0.4m/s)으로 근사 — 안내용 근사치 */
+     * 전패드 접촉 가정.
+     *
+     * 접선 성분(impulse 의 0.35·tangent 항)은 던지기가 빠를수록 같이 커진다. 예전처럼
+     * 상수 0.4 를 빼면 관대한 벽일수록 오차가 벌어져 초록 존이 실제보다 넓게 보였다 —
+     * 칠판은 표시 2.805 인데 실제 부착 한계가 2.42 였다(R11). 비례식으로 바꾸고 약간
+     * 보수적으로 잡아, 게이지가 "붙는다"고 한 구간은 실제로 붙게 한다. */
     _buildGaugeBand() {
       const T = ST.Physics.TUNE;
+      // 실측 보정. 맵 4종 모두에서 표시 limit <= 실제 부착 한계가 되도록 잡았다.
+      // sweet 도 같은 값으로 나눠 약 5~10%% 낮게 표시된다 — 의도적이다. 게이지는
+      // "이 세기면 붙는다"는 약속이라 어기지 않는 쪽이 우선이고, 점수 최적점은
+      // 플레이어가 위쪽으로 밀어붙이며 찾는 게 리스크-리워드로 자연스럽다.
+      const TANGENT_DIV = 1.20;
       const sumGrip = this.shape.stickyPoints.reduce((s, p) => s + p.grip, 0);
       const limit = sumGrip * this.map.mat.grip * ST.Sticky.K_MAX;
       const toSpeed = (vz) => Math.max(0, Math.min(T.VZ_MAX, vz)) / T.KZ;
       this.gaugeBand = {
         max: T.VZ_MAX / T.KZ,
         min: ST.Input.MIN_FLICK,
-        limit: toSpeed(limit / this.shape.mass - 0.4),
-        sweet: toSpeed(ST.Sticky.SWEET * limit / this.shape.mass - 0.4),
+        limit: toSpeed(limit / this.shape.mass / TANGENT_DIV),
+        sweet: toSpeed(ST.Sticky.SWEET * limit / this.shape.mass / TANGENT_DIV),
       };
     },
 
