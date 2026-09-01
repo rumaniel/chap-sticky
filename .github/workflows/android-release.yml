@@ -18,15 +18,15 @@ on:
         description: 'Play Console 에 업로드'
         type: boolean
         default: false
+      # CI 는 테스트 트랙까지만 올린다. 상위 트랙 승격은 콘솔에서 사람이 직접 한다 —
+      # 실수로 프로덕션에 밀어 넣을 여지를 없앤다.
       track:
-        description: '업로드할 트랙 (프로덕션 액세스 심사는 closed 만 인정)'
+        description: '업로드할 트랙 (승격은 콘솔에서 수동)'
         type: choice
         default: internal
         options:
           - internal
           - alpha
-          - beta
-          - production
       version_name:
         description: 'versionName (비우면 package.json 의 version)'
         type: string
@@ -190,7 +190,7 @@ jobs:
           retention-days: 14
 
       # alpha = 비공개 테스트. 프로덕션 액세스 심사는 이 트랙의 활동만 인정한다
-      # (internal 은 카운트되지 않는다).
+      # (internal 은 카운트되지 않는다). 그 위로는 콘솔에서 승격한다.
       - name: Upload to Play
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' }}
         uses: r0adkll/upload-google-play@v1
