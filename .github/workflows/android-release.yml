@@ -126,7 +126,15 @@ jobs:
             echo "signed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          printf '%s' "$KEYSTORE_B64" | base64 -d > "${RUNNER_TEMP}/upload.jks"
+          # PowerShell 로 시크릿을 넣으면 값에 CRLF 가 섞인다. GNU base64 는 CR 을
+          # 잘못된 입력으로 보고 죽으므로 공백류를 먼저 턴다.
+          printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > "${RUNNER_TEMP}/upload.jks"
+          SIZE=$(stat -c%s "${RUNNER_TEMP}/upload.jks")
+          if [ "$SIZE" -lt 1000 ]; then
+            echo "::error::복호화된 키스토어가 ${SIZE} bytes 다 — 시크릿이 잘렸거나 base64 가 아니다"
+            exit 1
+          fi
+          echo "키스토어 복호화 완료 (${SIZE} bytes)"
           echo "signed=true" >> "$GITHUB_OUTPUT"
 
       - name: Build release bundle
