@@ -187,7 +187,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_CONSOLE_SERVICE_ACCOUNT }}
           packageName: ${{ vars.PLAY_CONSOLE_PACKAGE_NAME }}
           releaseFiles: ${{ steps.aab.outputs.path }}
-          track: internal
+          tracks: internal
           status: completed
 
       - name: Shred keystore
