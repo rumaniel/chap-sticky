@@ -7,6 +7,32 @@
 
 ---
 
+## ⚠️ 대전제 — 로컬이 진실의 원천, PGS 는 미러
+
+이 게임은 **itch.io 웹 빌드로도 배포된다.** Play Games 를 타지 않아도 전부
+동작해야 한다. 그래서 업적·통계를 PGS 에 맡기지 않는다.
+
+```
+게임 로직  ──►  ST.Achievements (localStorage)   ← 진실의 원천, 모든 플랫폼
+                        │
+                        └──►  gamesvc.js  ──►  Play Games   ← 안드로이드 + 로그인 시에만
+```
+
+`increment()` 로 카운트를 PGS 에만 쌓으면 세 가지가 깨진다.
+
+| 상황 | PGS 에만 쌓을 때 | 로컬 우선일 때 |
+|---|---|---|
+| itch.io 웹 | 업적 없음 | **정상 동작** |
+| 안드로이드 · 비로그인 | 업적 없음 | **정상 동작** |
+| 나중에 로그인 | 그동안 쌓인 게 사라짐 | **한 번에 동기화(backfill)** |
+
+즉 **업적은 Play Games 기능이 아니라 게임 기능**이고, PGS 는 그걸 구글 프로필에
+비추는 레이어다. 리더보드도 같다 — 로컬 top 10 은 유지되고 전역 순위가 얹힌다.
+
+부수 효과: itch 빌드도 업적을 갖게 된다. 원래 없던 게 생기는 것이다.
+
+---
+
 ## 0. 플러그인은 직접 만든다
 
 npm 실사 결과 (2026-09-01):
@@ -82,6 +108,7 @@ OAuth 클라이언트에 등록하는 인증서 지문은 **업로드 키가 아
 
 ## 4. 업적 (12개)
 
+**전부 로컬에서 판정하고 저장한다.** PGS 는 달성 순간에 미러링만 한다.
 `earned` = 누적 점수(`ST.Score.earned()`), 해금 시스템과 같은 값이다.
 
 | ID | 이름 | 설명 | 유형 | 트리거 |
@@ -99,8 +126,10 @@ OAuth 클라이언트에 등록하는 인증서 지문은 **업로드 키가 아
 | `ACH_PARTY_8` | 파티의 밤 | 8인 파티 완주 | 일반 | `session.players.length === 8 && session.done` |
 | `ACH_ALL_MAPS` | 벽 정복 | 4개 맵 전부에서 라운드 완주 | 증분 4 | 맵별 최초 완주 |
 
-증분형 3개(`CURVE_25` / `PERFECT_10` / `ALL_MAPS`)는 `increment()` 로 올린다.
-`ALL_MAPS` 는 중복 증가를 막아야 하므로 완주한 맵 집합을 `localStorage` 에 따로 남긴다.
+증분형 3개(`CURVE_25` / `PERFECT_10` / `ALL_MAPS`)도 **카운터는 로컬에 둔다.**
+PGS 에는 `setSteps(id, 누적값)` 으로 절대값을 밀어 넣는다 — `increment()` 로 상대값을
+보내면 로그인 전후로 이중 계산되거나 누락된다. `ALL_MAPS` 는 완주한 맵 집합을
+저장해 중복을 막는다.
 
 ---
 
@@ -109,26 +138,57 @@ OAuth 클라이언트에 등록하는 인증서 지문은 **업로드 키가 아
 ### 파일
 
 ```
+game/js/achievements.js                                신규 — 업적 판정·저장 (플랫폼 무관)
+game/js/gamesvc.js                                     신규 — 로컬 → Play Games 미러
 android/app/src/main/java/com/mangru/chapsticky/PlayGamesPlugin.java   신규 — 네이티브 래퍼
-game/js/gamesvc.js                                                     신규 — 게임 이벤트 → PGS 호출
-game/js/score.js                                                       훅 추가 (커브·퍼펙트·스팟 카운트)
-game/js/modes.js                                                       훅 추가 (_finish 에서 제출)
-game/index.html                                                        gamesvc.js 스크립트 태그
+game/js/score.js                                       stats 저장 추가
+game/js/modes.js                                       라운드 종료 훅
+game/js/ui.js                                          업적 화면 (모든 플랫폼)
+game/index.html                                        스크립트 태그 2개 + 업적 화면 마크업
 ```
 
-`gamesvc.js` 는 `platform.js` 와 같은 원칙을 따른다 — `window.Capacitor` 가 없으면
-**통째로 no-op**. 브라우저·itch 빌드는 아무 영향이 없다.
+### 계층
 
-### 경계
+**1층 — `achievements.js` (모든 플랫폼)**
 
-- 로그인 실패해도 게임은 그대로 돌아간다. PGS 호출은 전부 `try/catch` + 실패 무시
-- **로컬 리더보드는 유지한다.** 전역 순위는 얹는 것이지 대체가 아니다
-  (오프라인·비로그인 사용자에게 로컬 top 10 이 계속 필요하다)
-- 결과 화면에 "전체 순위 보기" 버튼 추가 → `getLeaderboardIntent`
+```js
+ST.Achievements.record({ stuck: true, curve: true, holdTime: 34.2, ... });
+// 내부에서 stats 갱신 → 조건 평가 → 새로 달성된 것만 반환
+// → localStorage 저장 → ST.Achievements.onUnlock 콜백
+```
+
+`ST.Score` 의 `store` 에 `stats` 를 추가한다. 기존 세이브에는 없는 필드라
+`Object.assign` 기본값으로 자연스럽게 마이그레이션된다.
+
+```js
+stats: { sticks: 0, curves: 0, perfects: 0, bestHold: 0, spotsBest: 0,
+         mapsDone: [], party8: false, unlocked: [] }
+```
+
+**2층 — `gamesvc.js` (안드로이드 + 로그인 시에만)**
+
+- `platform.js` 와 같은 원칙: `window.Capacitor` 없으면 **통째로 no-op**
+- `ST.Achievements.onUnlock` 을 구독해 PGS 에 미러링
+- 로그인 성공 시 **backfill** — `stats.unlocked` 전체를 한 번 밀어 넣는다.
+  PGS 는 이미 달성된 업적을 다시 unlock 해도 무해하다
+- 증분형은 `setSteps(id, 로컬 누적값)` 으로 절대값 동기화
+- 모든 호출 `try/catch` + 실패 무시. 실패해도 게임은 그대로 돈다
+
+**3층 — `PlayGamesPlugin.java`**
+
+`initialize` / `isAuthenticated` / `signIn` / `unlock` / `setSteps` /
+`submitScore` / `showLeaderboard` / `showAchievements` — 8개 메서드.
+
+### UI
+
+- **업적 화면은 모든 플랫폼에 넣는다.** 로컬 데이터로 그리므로 itch 에서도 보인다
+- 안드로이드 + 로그인 상태일 때만 "Play 게임즈에서 보기" 버튼이 추가로 보인다
+- 결과 화면의 "전체 순위 보기" 도 같은 조건부 노출
 
 ### APK 영향
 
 `play-services-games-v2` 가 대략 **1~2MB** 늘린다 (현재 AAB 3.2MB).
+itch 빌드는 JS 두 파일(합계 ~6KB 예상)만 늘어난다.
 
 ---
 
@@ -159,9 +219,16 @@ Play Games 는 **Google 계정 식별자를 다룬다.** SDK 0 을 전제로 쓴
 - [ ] 게임 ID 전달
 - [ ] PGS 테스터에 비공개 테스트 12명 등록
 
-**저장소**
-- [ ] `PlayGamesPlugin.java` 작성
-- [ ] `gamesvc.js` + 훅
-- [ ] 결과 화면 "전체 순위 보기" 버튼
-- [ ] 문서 4종 갱신 (§6)
+**저장소 — 1단계: 플랫폼 무관 (itch 에도 나간다)**
+- [ ] `score.js` 에 `stats` 저장 추가
+- [ ] `achievements.js` — 판정·저장·`onUnlock`
+- [ ] 업적 화면 UI + 결과 화면 연동
 - [ ] `docs/RESOURCES.md` R보드 등록
+
+**저장소 — 2단계: 안드로이드 전용**
+- [ ] `PlayGamesPlugin.java`
+- [ ] `gamesvc.js` — 미러링 + 로그인 backfill
+- [ ] "Play 게임즈에서 보기" / "전체 순위 보기" 조건부 버튼
+- [ ] 문서 4종 갱신 (§6)
+
+1단계만 먼저 머지해도 itch 에 업적이 생긴다. 콘솔 설정을 기다릴 필요가 없다.
