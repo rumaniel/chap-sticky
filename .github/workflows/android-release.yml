@@ -2,7 +2,7 @@ name: Android Release
 
 # 두 가지로 쓴다.
 #   1) PR — 안드로이드 셸이나 게임 코드가 바뀌면 AAB 가 실제로 빌드되는지만 확인 (서명·업로드 없음)
-#   2) 수동 실행 — 서명된 AAB 를 만들고, publish 를 켜면 내부 테스트 트랙까지 올린다
+#   2) 수동 실행 — 서명된 AAB 를 만들고, publish 를 켜면 지정 트랙까지 올린다
 on:
   pull_request:
     paths:
@@ -15,9 +15,18 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: 'Play Console 내부 테스트 트랙에 업로드'
+        description: 'Play Console 에 업로드'
         type: boolean
         default: false
+      track:
+        description: '업로드할 트랙 (프로덕션 액세스 심사는 closed 만 인정)'
+        type: choice
+        default: internal
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
       version_name:
         description: 'versionName (비우면 package.json 의 version)'
         type: string
@@ -180,14 +189,16 @@ jobs:
           path: ${{ steps.aab.outputs.path }}
           retention-days: 14
 
-      - name: Upload to Play internal track
+      # alpha = 비공개 테스트. 프로덕션 액세스 심사는 이 트랙의 활동만 인정한다
+      # (internal 은 카운트되지 않는다).
+      - name: Upload to Play
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_CONSOLE_SERVICE_ACCOUNT }}
           packageName: ${{ vars.PLAY_CONSOLE_PACKAGE_NAME }}
           releaseFiles: ${{ steps.aab.outputs.path }}
-          tracks: internal
+          tracks: ${{ github.event.inputs.track }}
           status: completed
 
       - name: Shred keystore
