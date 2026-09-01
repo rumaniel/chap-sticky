@@ -16,21 +16,41 @@ CI 가 AAB 에 서명하려면 업로드 키가 필요하다. **이 절차는 �
 저장소 **바깥**에 만든다. 저장소 안에 두면 실수로 커밋될 수 있다
 (`.gitignore` 로 막아두긴 했다).
 
+> **PowerShell 은 `~` 를 확장하지 않는다.** 네이티브 exe 인자로 넘어간 `~` 는
+> 문자 그대로 전달돼 `~\keys\...` 라는 존재하지 않는 경로가 된다. 폴더도 미리
+> 만들어야 한다 — keytool 은 상위 폴더를 만들어 주지 않는다.
+
+**PowerShell**
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\keys" | Out-Null
+```
+
+```powershell
+keytool -genkeypair -v -keystore "$env:USERPROFILE\keys\chapsticky-upload.jks" -alias chapsticky -keyalg RSA -keysize 4096 -validity 10000 -storetype PKCS12 -dname "CN=Studio Mangru, O=Studio Mangru, C=KR"
+```
+
+**Git Bash / macOS / Linux**
+
 ```bash
-keytool -genkeypair -v -keystore ~/keys/chapsticky-upload.jks -alias chapsticky -keyalg RSA -keysize 4096 -validity 10000 -storetype PKCS12
+mkdir -p ~/keys
+```
+
+```bash
+keytool -genkeypair -v -keystore ~/keys/chapsticky-upload.jks -alias chapsticky -keyalg RSA -keysize 4096 -validity 10000 -storetype PKCS12 -dname "CN=Studio Mangru, O=Studio Mangru, C=KR"
 ```
 
 - `-validity 10000` ≈ 27년. Play 는 2033년 이후까지 유효한 키를 요구한다.
-- 이름·조직 등을 물어보면 아무 값이나 넣어도 되지만, `CN=Studio Mangru` 정도로 채운다.
+- `-dname` 을 주면 이름·조직 질문을 건너뛴다. `C=` 는 **두 글자 국가 코드**(`KR`)다.
 - 비밀번호는 **저장소 비밀번호와 키 비밀번호 두 개**를 묻는다. 같게 해도 된다.
 
 확인:
 
-```bash
-keytool -list -v -keystore ~/keys/chapsticky-upload.jks -alias chapsticky
+```powershell
+keytool -list -v -keystore "$env:USERPROFILE\keys\chapsticky-upload.jks" -alias chapsticky
 ```
 
-`Signature algorithm name: SHA384withRSA` 같은 줄과 유효기간이 보이면 정상이다.
+`Signature algorithm name: SHA256withRSA` 같은 줄과 유효기간이 보이면 정상이다.
 
 ---
 
@@ -39,8 +59,16 @@ keytool -list -v -keystore ~/keys/chapsticky-upload.jks -alias chapsticky
 키 파일은 base64 로 시크릿에 넣는다. 비밀번호는 따로 시크릿, alias 는 공개돼도
 무해하므로 변수로 둔다.
 
+**Git Bash (권장)**
+
 ```bash
 base64 -w0 ~/keys/chapsticky-upload.jks | gh secret set ANDROID_KEYSTORE_BASE64 -R rumaniel/chap-sticky
+```
+
+**PowerShell** — `base64` 명령이 없어서 .NET 으로 만든다.
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\keys\chapsticky-upload.jks")) | gh secret set ANDROID_KEYSTORE_BASE64 -R rumaniel/chap-sticky
 ```
 
 ```bash
@@ -56,6 +84,7 @@ gh variable set ANDROID_KEYALIAS_NAME -R rumaniel/chap-sticky --body chapsticky
 ```
 
 macOS 에서는 `base64 -w0` 대신 `base64 -i ~/keys/chapsticky-upload.jks`.
+어느 쪽으로 넣어도 된다 — 워크플로가 복호화 전에 개행·CR 을 털어낸다.
 
 Play Console 업로드까지 하려면 두 개가 더 필요하다. 서비스 계정은 **계정 단위**라
 솔리테어에서 쓰던 값을 그대로 재사용하면 된다.
