@@ -1,0 +1,167 @@
+# Play Games Services — 업적 · 리더보드 준비
+
+대상: `com.mangru.chapsticky` · 목표 버전 **1.1.0**
+
+비공개 테스트 14일 동안 테스터 12명이 실제로 플레이해야 한다. 그 기간에 순위표와
+업적이 있으면 **테스트 참여 동기 자체가 만들어진다.** 그래서 1.1.0 으로 잡았다.
+
+---
+
+## 0. 플러그인은 직접 만든다
+
+npm 실사 결과 (2026-09-01):
+
+| 패키지 | 버전 | 최종 배포 | 주간 다운로드 | 판정 |
+|---|---|---|---|---|
+| `@idleflowgames/capacitor-play-games` | 0.2.1 | 2026-07-30 | 110 | 기능은 맞으나 **0.2.x, 사실상 미검증** |
+| `capacitor-play-games-services` | 2.0.1 | **2023-07-04** | 119 | Capacitor **5** peer — Cap 8 과 안 맞음 |
+
+서명된 프로덕션 앱을 주간 110 다운로드짜리 0.2.1 에 맡길 이유가 없다. 우리가 쓸
+네이티브 API 가 5개뿐이라 **직접 래핑하는 게 코드도 적고 통제 가능하다.**
+
+```java
+PlayGamesSdk.initialize(context);
+PlayGames.getGamesSignInClient(activity).isAuthenticated();
+PlayGames.getLeaderboardsClient(activity).submitScore(id, score);
+PlayGames.getLeaderboardsClient(activity).getLeaderboardIntent(id);   // 순위표 화면
+PlayGames.getAchievementsClient(activity).unlock(id) / .increment(id, n);
+```
+
+---
+
+## 1. ⚠️ 먼저 알아야 할 함정 — SHA-1 은 **앱 서명 키**의 것
+
+OAuth 클라이언트에 등록하는 인증서 지문은 **업로드 키가 아니다.** Play 앱 서명을
+쓰고 있어서 구글이 앱을 재서명하므로, 기기에 설치된 APK 의 서명은 **앱 서명 키**다.
+업로드 키 지문을 넣으면 로그인이 조용히 실패한다.
+
+- ❌ 업로드 키 SHA-1 (`keytool -list` 로 나오는 값)
+- ✅ **Play Console → 앱 무결성 → 앱 서명 → 앱 서명 키 인증서 → SHA-1**
+
+내부 테스트로 설치한 빌드도 앱 서명 키로 재서명돼 있다. 로컬 `bundleRelease` 산출물을
+직접 설치하면 업로드 키 서명이라 로그인이 안 되는 게 정상이다 — 반드시 Play 를 통해
+설치한 빌드로 테스트한다.
+
+---
+
+## 2. 콘솔 설정 순서
+
+1. **Play Console → 성장 → Play 게임즈 서비스 → 설정 및 관리 → 구성**
+2. "내 게임이 Google API 를 사용하지 않습니다" 선택 → 새 프로젝트 생성
+   (솔리테어 Firebase 프로젝트와 섞지 않는다. 이 앱은 SDK 0 이 원칙이었고 Play Games 만 예외로 둔다)
+3. **사용자 인증 정보 추가 → Android** → 패키지명 `com.mangru.chapsticky` +
+   **앱 서명 키 SHA-1** (§1)
+4. OAuth 동의 화면 작성 (앱 이름·지원 이메일 `studio@mangru.dev`·개인정보처리방침 URL)
+5. **리더보드**(§3)·**업적**(§4) 정의 → 각각 발급되는 **ID 를 기록**
+6. **게임 ID** 를 `android/app/src/main/res/values/strings.xml` 에 추가
+   ```xml
+   <string name="app_id">숫자 게임 ID</string>
+   ```
+7. **테스터 등록** — Play Games 서비스는 게시 전까지 테스터 계정만 로그인된다.
+   비공개 테스트 테스터 12명을 여기에도 넣어야 한다
+8. 게시(Publish) — 리더보드·업적은 게시해야 일반 사용자에게 보인다
+
+> 5번에서 나오는 ID 문자열(`CgkI...`)은 코드에 상수로 박아야 한다. 콘솔에서 정의를
+> 바꿔도 ID 는 유지되므로 이름·설명은 나중에 다듬어도 된다.
+
+---
+
+## 3. 리더보드 (2개)
+
+| 슬롯 | 이름 | 형식 | 정렬 | 제출 값 | 제출 시점 |
+|---|---|---|---|---|---|
+| `LB_BEST_SCORE` | 최고 점수 / Best Score | 정수 | 높을수록 좋음 | 라운드 총점 `p.total` | `Modes._finish()` — **연습 모드만** |
+| `LB_LONGEST_HOLD` | 최장 버티기 / Longest Hang | 시간(ms) | 높을수록 좋음 | `p.bestHold * 1000` | 같음 |
+
+파티 모드는 제출하지 않는다. 한 기기에서 여러 명이 던지므로 계정 주인의 실력이 아니다.
+
+맵별 리더보드는 만들지 않는다 — 4개가 더 생기면 관리 부담 대비 얻는 게 적다.
+필요해지면 나중에 추가한다.
+
+---
+
+## 4. 업적 (12개)
+
+`earned` = 누적 점수(`ST.Score.earned()`), 해금 시스템과 같은 값이다.
+
+| ID | 이름 | 설명 | 유형 | 트리거 |
+|---|---|---|---|---|
+| `ACH_FIRST_STICK` | 첫 찰싹 | 처음으로 벽에 붙였다 | 일반 | 첫 `res.stuck` |
+| `ACH_GLASS` | 유리창 개방 | 누적 3,000점 — 유리창 해금 | 일반 | `earned >= 3000` |
+| `ACH_OCTO` | 문어 등장 | 누적 5,000점 — 문어찐득 해금 | 일반 | `earned >= 5000` |
+| `ACH_FRIDGE` | 냉장고 습격 | 누적 12,000점 — 냉장고 해금 | 일반 | `earned >= 12000` |
+| `ACH_STAR` | 별의 순간 | 누적 15,000점 — 별찐득 해금 | 일반 | `earned >= 15000` |
+| `ACH_CURVE_25` | 커브 마스터 | 커브볼로 25번 붙이기 | 증분 25 | `ts.curve` 인 부착 |
+| `ACH_PERFECT_10` | 찰떡같이 | 퍼펙트 부착 10회 | 증분 10 | `res.perfect` |
+| `ACH_HOLD_30` | 30초의 벽 | 한 번에 30초 버티기 | 일반 | `ts.holdTime >= 30` |
+| `ACH_HOLD_60` | 요지부동 | 한 번에 60초 버티기 | 일반(히든) | `ts.holdTime >= 60` |
+| `ACH_SPOT_5` | 스팟 헌터 | 한 라운드에 보너스 스팟 5개 통과 | 일반 | `ts.spotsHit.size >= 5` 누계 |
+| `ACH_PARTY_8` | 파티의 밤 | 8인 파티 완주 | 일반 | `session.players.length === 8 && session.done` |
+| `ACH_ALL_MAPS` | 벽 정복 | 4개 맵 전부에서 라운드 완주 | 증분 4 | 맵별 최초 완주 |
+
+증분형 3개(`CURVE_25` / `PERFECT_10` / `ALL_MAPS`)는 `increment()` 로 올린다.
+`ALL_MAPS` 는 중복 증가를 막아야 하므로 완주한 맵 집합을 `localStorage` 에 따로 남긴다.
+
+---
+
+## 5. 구현 설계
+
+### 파일
+
+```
+android/app/src/main/java/com/mangru/chapsticky/PlayGamesPlugin.java   신규 — 네이티브 래퍼
+game/js/gamesvc.js                                                     신규 — 게임 이벤트 → PGS 호출
+game/js/score.js                                                       훅 추가 (커브·퍼펙트·스팟 카운트)
+game/js/modes.js                                                       훅 추가 (_finish 에서 제출)
+game/index.html                                                        gamesvc.js 스크립트 태그
+```
+
+`gamesvc.js` 는 `platform.js` 와 같은 원칙을 따른다 — `window.Capacitor` 가 없으면
+**통째로 no-op**. 브라우저·itch 빌드는 아무 영향이 없다.
+
+### 경계
+
+- 로그인 실패해도 게임은 그대로 돌아간다. PGS 호출은 전부 `try/catch` + 실패 무시
+- **로컬 리더보드는 유지한다.** 전역 순위는 얹는 것이지 대체가 아니다
+  (오프라인·비로그인 사용자에게 로컬 top 10 이 계속 필요하다)
+- 결과 화면에 "전체 순위 보기" 버튼 추가 → `getLeaderboardIntent`
+
+### APK 영향
+
+`play-services-games-v2` 가 대략 **1~2MB** 늘린다 (현재 AAB 3.2MB).
+
+---
+
+## 6. 문서 파급 — 되돌려야 할 4곳
+
+Play Games 는 **Google 계정 식별자를 다룬다.** SDK 0 을 전제로 쓴 문서를 전부 고쳐야
+하고, 이건 **앱 출시 전에** 끝나야 한다.
+
+| 문서 | 현재 | 1.1.0 에서 |
+|---|---|---|
+| [개인정보처리방침](https://studio-mangru.github.io/privacy/) §1 | "제3자 SDK 를 전혀 포함하지 않으며 외부로 아무 것도 전송하지 않습니다" | Play Games Services 사용·게임 계정 식별자 처리 명시 |
+| 데이터 보안 양식 | 수집 없음 / 공유 없음 | 앱 활동(게임 진행)·기기 ID 수집으로 갱신 |
+| 스토어 설명 §2 | "계정도, 로그인도, 광고도 없습니다" | 로그인은 **선택**이고 없어도 전부 플레이 가능하다는 쪽으로 수정 |
+| `INTERNET` 권한 | 제거 검토 중이었다 | **제거 불가** — PGS 가 네트워크를 쓴다 |
+
+> 오프라인·계정 없음이 셀링 포인트였다. 이걸 포기하는 대신 전역 순위를 얻는 거래다.
+> 로그인을 강제하지 않으면 손실을 최소화할 수 있다.
+
+---
+
+## 7. 체크리스트
+
+**콘솔 (사람이 직접)**
+- [ ] 앱 서명 키 SHA-1 확보 (앱 무결성 화면)
+- [ ] Play 게임즈 서비스 구성 + OAuth 클라이언트 등록
+- [ ] 리더보드 2개 정의 → ID 기록
+- [ ] 업적 12개 정의 → ID 기록
+- [ ] 게임 ID 전달
+- [ ] PGS 테스터에 비공개 테스트 12명 등록
+
+**저장소**
+- [ ] `PlayGamesPlugin.java` 작성
+- [ ] `gamesvc.js` + 훅
+- [ ] 결과 화면 "전체 순위 보기" 버튼
+- [ ] 문서 4종 갱신 (§6)
+- [ ] `docs/RESOURCES.md` R보드 등록
