@@ -1,0 +1,195 @@
+name: Android Release
+
+# 두 가지로 쓴다.
+#   1) PR — 안드로이드 셸이나 게임 코드가 바뀌면 AAB 가 실제로 빌드되는지만 확인 (서명·업로드 없음)
+#   2) 수동 실행 — 서명된 AAB 를 만들고, publish 를 켜면 내부 테스트 트랙까지 올린다
+on:
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'game/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.json'
+      - '.github/workflows/android-release.yml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Play Console 내부 테스트 트랙에 업로드'
+        type: boolean
+        default: false
+      version_name:
+        description: 'versionName (비우면 package.json 의 version)'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ github.event.pull_request.number || 'manual' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # package.json 의 volta.node 를 읽는다. Node 버전 진실의 원천은 그 한 곳뿐이다.
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # game/ 을 android/app/src/main/assets/public 로 복사하고 플러그인 목록을 갱신한다.
+      - name: Capacitor sync
+        run: npx cap sync android
+
+      # 수동 실행 + publish 일 때만 Play 를 조회한다. Play 에 이미 올라간 최대
+      # versionCode 를 넘겨야 업로드가 거부되지 않는다. PR 빌드는 어차피 버리는
+      # 산출물이라 run_number 로 충분하다.
+      - name: Resolve version
+        id: ver
+        env:
+          PUBLISH: ${{ github.event.inputs.publish }}
+          PACKAGE_NAME: ${{ vars.PLAY_CONSOLE_PACKAGE_NAME }}
+          SA_JSON: ${{ secrets.PLAY_CONSOLE_SERVICE_ACCOUNT }}
+          VERSION_NAME_IN: ${{ github.event.inputs.version_name }}
+        run: |
+          set -euo pipefail
+
+          NAME="${VERSION_NAME_IN:-}"
+          if [ -z "$NAME" ]; then
+            NAME=$(node -p "require('./package.json').version")
+          fi
+
+          if [ "${PUBLISH:-false}" != "true" ]; then
+            CODE="${GITHUB_RUN_NUMBER}"
+            echo "publish 아님 — versionCode=$CODE (run_number)"
+          else
+            if [ -z "${PACKAGE_NAME:-}" ] || [ -z "${SA_JSON:-}" ]; then
+              echo "::error::publish 하려면 변수 PLAY_CONSOLE_PACKAGE_NAME 과 시크릿 PLAY_CONSOLE_SERVICE_ACCOUNT 가 필요하다"
+              exit 1
+            fi
+            SA_FILE="${RUNNER_TEMP}/play-sa.json"
+            printf '%s' "$SA_JSON" > "$SA_FILE"
+            gcloud auth activate-service-account --key-file "$SA_FILE" --quiet
+            TOKEN=$(gcloud auth print-access-token \
+              --scopes=https://www.googleapis.com/auth/androidpublisher --quiet)
+            rm -f "$SA_FILE"
+
+            api() {
+              curl -sS -X "$1" -H "Authorization: Bearer ${TOKEN}" \
+                   -H 'Content-Type: application/json' "$2"
+            }
+            BASE="https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${PACKAGE_NAME}"
+            EDIT_ID=$(api POST "${BASE}/edits" | jq -r '.id // empty')
+            [ -n "$EDIT_ID" ] || { echo "::error::edit 생성 실패 — 앱이 Play Console 에 있는지 확인"; exit 1; }
+            TRACKS=$(api GET "${BASE}/edits/${EDIT_ID}/tracks")
+            MAX=$(echo "$TRACKS" | jq '[.tracks[]?.releases[]?.versionCodes[]?] | map(tonumber) | max // 0')
+            curl -sS -X DELETE -H "Authorization: Bearer ${TOKEN}" "${BASE}/edits/${EDIT_ID}" >/dev/null || true
+            CODE=$((MAX + 1))
+            echo "Play 최대 versionCode=$MAX → $CODE"
+          fi
+
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      # 시크릿이 없으면(아직 키를 안 만든 상태, PR 빌드) 서명 없이 진행한다.
+      # 빌드 자체가 깨지지 않는지는 그대로 확인된다.
+      - name: Decode upload keystore
+        id: ks
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_B64:-}" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 없음 — 서명 없이 빌드한다"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # PowerShell 로 시크릿을 넣으면 값에 CRLF 가 섞인다. GNU base64 는 CR 을
+          # 잘못된 입력으로 보고 죽으므로 공백류를 먼저 턴다.
+          printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > "${RUNNER_TEMP}/upload.jks"
+          SIZE=$(stat -c%s "${RUNNER_TEMP}/upload.jks")
+          if [ "$SIZE" -lt 1000 ]; then
+            echo "::error::복호화된 키스토어가 ${SIZE} bytes 다 — 시크릿이 잘렸거나 base64 가 아니다"
+            exit 1
+          fi
+          echo "키스토어 복호화 완료 (${SIZE} bytes)"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build release bundle
+        env:
+          ANDROID_VERSION_CODE: ${{ steps.ver.outputs.code }}
+          ANDROID_VERSION_NAME: ${{ steps.ver.outputs.name }}
+          ANDROID_KEYSTORE_PATH: ${{ steps.ks.outputs.signed == 'true' && format('{0}/upload.jks', runner.temp) || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEYALIAS_NAME: ${{ vars.ANDROID_KEYALIAS_NAME }}
+          ANDROID_KEYALIAS_PASSWORD: ${{ secrets.ANDROID_KEYALIAS_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon bundleRelease
+
+      - name: Inspect bundle
+        id: aab
+        run: |
+          set -euo pipefail
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          [ -f "$AAB" ] || { echo "::error::AAB 가 생성되지 않았다"; exit 1; }
+          SIZE=$(stat -c%s "$AAB")
+          echo "AAB: $AAB  ${SIZE} bytes"
+          if unzip -l "$AAB" | grep -q 'META-INF/.*\.RSA'; then
+            echo "서명: 있음"
+          else
+            echo "서명: 없음 (unsigned)"
+          fi
+          echo "path=$AAB" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Android bundle"
+            echo ""
+            echo "- versionCode: \`${{ steps.ver.outputs.code }}\`"
+            echo "- versionName: \`${{ steps.ver.outputs.name }}\`"
+            echo "- 서명: \`${{ steps.ks.outputs.signed }}\`"
+            echo "- 크기: \`$((SIZE / 1024)) KB\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: chapsticky-${{ steps.ver.outputs.name }}-${{ steps.ver.outputs.code }}
+          path: ${{ steps.aab.outputs.path }}
+          retention-days: 14
+
+      - name: Upload to Play internal track
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_CONSOLE_SERVICE_ACCOUNT }}
+          packageName: ${{ vars.PLAY_CONSOLE_PACKAGE_NAME }}
+          releaseFiles: ${{ steps.aab.outputs.path }}
+          track: internal
+          status: completed
+
+      - name: Shred keystore
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/upload.jks"
