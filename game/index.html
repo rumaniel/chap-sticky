@@ -18,7 +18,16 @@
     word-break: keep-all;
     overflow-wrap: break-word;
   }
-  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  /* 노치·제스처바 안쪽으로만 그린다. Android WebView(Capacitor)와 노치 단말 대응 —
+     resize()가 이 박스의 실측 크기를 쓰므로 인셋이 자동으로 반영된다. */
+  #wrap {
+    position: fixed;
+    top: env(safe-area-inset-top, 0px);
+    right: env(safe-area-inset-right, 0px);
+    bottom: env(safe-area-inset-bottom, 0px);
+    left: env(safe-area-inset-left, 0px);
+    display: flex; align-items: center; justify-content: center;
+  }
   #game { display: block; background: #2a2145; }
 
   /* ---------- overlay UI ---------- */
@@ -111,6 +120,17 @@
     border: none; background: rgba(255,255,255,.15); color: #fff; cursor: pointer;
   }
   #langToggle { font-size: 15px; font-weight: 800; }
+
+  /* 짧은 안내 토스트 — 오버레이(z-index 10)보다 위라 타이틀 화면에서도 보인다 */
+  #toast {
+    /* 22% — 좌하단 FAB 버튼 행(캔버스 바닥에서 54px) 위로 비켜 앉힌다 */
+    position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%);
+    z-index: 30; padding: 10px 20px; border-radius: 20px;
+    background: rgba(20, 15, 40, .88); color: #e6ddff;
+    font-size: 14px; font-weight: 700; white-space: nowrap;
+    opacity: 0; transition: opacity .18s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
 </style>
 </head>
 <body>
@@ -192,6 +212,7 @@
   </div>
   <button class="fabBtn" id="sndToggle">🔊</button>
   <button class="fabBtn" id="langToggle">EN</button>
+  <div id="toast"></div>
 </div>
 
 <script src="js/i18n.js"></script>

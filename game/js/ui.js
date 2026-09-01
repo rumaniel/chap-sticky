@@ -87,8 +87,36 @@ window.ST = window.ST || {};
     mk($('mapCards'), ST.Materials.list, 'map');
   }
 
+  // 화면별 상위 화면. scr-select 는 진입 경로에 따라 갈리므로 back()에서 따로 처리한다.
+  const BACK_PARENT = {
+    'scr-mode': 'scr-title',
+    'scr-party': 'scr-mode',
+    'scr-board': 'scr-title',
+    'scr-result': 'scr-title',
+  };
+  const BACK_WINDOW_MS = 2000;
+  let backArmedAt = 0;
+
+  // 되돌릴 수 없는 뒤로가기(라운드 포기·앱 종료)는 2초 안에 두 번 눌러야 한다.
+  function armBack() {
+    const now = performance.now();
+    if (now - backArmedAt < BACK_WINDOW_MS) { backArmedAt = 0; return true; }
+    backArmedAt = now;
+    return false;
+  }
+
+  let toastTimer = null;
+  function toast(msg) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+  }
+
   const UI = {
     show,
+    toast,
     showGame() {
       stopTitleAnim();
       $('overlay').classList.remove('show');
@@ -145,6 +173,24 @@ window.ST = window.ST || {};
       });
       html += '</table>';
       $('boardWrap').innerHTML = html;
+    },
+
+    /* Android 뒤로가기 진입점. 처리했으면 true, 최상위(타이틀)면 false 를 돌려주고
+     * 앱 종료 여부는 플랫폼 셸이 결정하게 둔다. 웹에서는 호출되지 않는다. */
+    back() {
+      // 오버레이가 닫혀 있으면 플레이 중이다. 실수로 라운드를 날리지 않게 두 번 눌러야 한다.
+      if (!$('overlay').classList.contains('show')) {
+        if (!armBack()) { toast(t('back.toMenu')); return true; }
+        ST.Modes.toTitle();
+        return true;
+      }
+      const cur = document.querySelector('.screen.show');
+      const id = cur ? cur.id : 'scr-title';
+      if (id === 'scr-select') { show(nextMode === 'party' ? 'scr-party' : 'scr-mode'); return true; }
+      const parent = BACK_PARENT[id];
+      if (parent) { show(parent); return true; }
+      if (!armBack()) { toast(t('back.exit')); return true; }
+      return false;
     },
 
     // 언어 전환 시 열려 있는 동적 화면 갱신
