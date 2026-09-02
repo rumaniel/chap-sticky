@@ -7,7 +7,7 @@
  * 브라우저에서는 window 가 전역 객체라 `window.ST = ...` 가 전역 `ST` 를 만든다.
  * vm 컨텍스트에서도 컨텍스트 객체 자신을 window 로 묶어 같은 관계를 재현한다.
  *
- * 게이지 상수(TANGENT_DIV/SWEET_DIV)는 main.js 에서 정규식으로 뽑아 쓴다. 여기에
+ * 게이지 상수(TANGENT_DIV)는 main.js 에서 정규식으로 뽑아 쓴다. 여기에
  * 숫자를 적어두면 코드를 고칠 때 조용히 어긋난다.
  *
  * 난수는 시드 고정이다. 같은 시드 = 같은 숫자. 문서에 수치를 쓸 때는 시드도 같이 적는다.
@@ -74,10 +74,24 @@ function constFromMain(name, fallback) {
 }
 const MIN_FLICK = 0.38; // ST.Input.MIN_FLICK (input.js 는 DOM 의존이라 로드하지 않는다)
 const TANGENT_DIV = Number(process.env.TANGENT_DIV || constFromMain('TANGENT_DIV'));
-const SWEET_DIV = Number(process.env.SWEET_DIV || constFromMain('SWEET_DIV', TANGENT_DIV));
 
-/* main.js _buildGaugeBand 와 같은 식. 저기를 고치면 여기도 고쳐야 한다. */
-function gaugeBand(shape, map, tanDiv, sweetDiv) {
+/* main.js _buildGaugeBand / _solveSweet 와 같은 식이어야 한다.
+ * limit 은 최악(비스듬한 던지기) 기준 안전 하한이라 상수로 나누고,
+ * sweet 은 똑바로 던졌을 때 r(s)=SWEET 이 되는 s 를 닫힌 해로 푼다. */
+function solveSweet(shape, lim) {
+  const G = T.GRAVITY * (T.WALL_Z - T.HOLD_Z) / T.KZ;
+  const s0 = Math.sqrt(G / T.KY);
+  const C = ST.Sticky.SWEET * lim / shape.mass;
+  const aHi = T.KZ + 0.35 * T.KY, cHi = 0.35 * G;
+  const sHi = (C + Math.sqrt(C * C + 4 * aHi * cHi)) / (2 * aHi);
+  if (sHi >= s0) return sHi;
+  const aLo = T.KZ - 0.35 * T.KY;
+  const disc = C * C - 4 * aLo * cHi;
+  if (disc < 0) return s0;
+  return Math.min(s0, (C + Math.sqrt(disc)) / (2 * aLo));
+}
+
+function gaugeBand(shape, map, tanDiv) {
   const sumGrip = shape.stickyPoints.reduce((s, p) => s + p.grip, 0);
   const lim = sumGrip * map.mat.grip * ST.Sticky.K_MAX;
   const toSpeed = (vz) => Math.max(0, Math.min(T.VZ_MAX, vz)) / T.KZ;
@@ -85,7 +99,7 @@ function gaugeBand(shape, map, tanDiv, sweetDiv) {
     max: T.VZ_MAX / T.KZ,
     min: MIN_FLICK,
     limit: toSpeed(lim / shape.mass / (tanDiv || TANGENT_DIV)),
-    sweet: toSpeed(ST.Sticky.SWEET * lim / shape.mass / (sweetDiv || SWEET_DIV)),
+    sweet: Math.min(T.VZ_MAX / T.KZ, solveSweet(shape, lim)),
   };
 }
 
@@ -178,13 +192,13 @@ function measure(shape, map, skill, n, seed) {
 
 module.exports = {
   ST, T, gaugeBand, measure, playThrow, srand, rnd, gauss,
-  MIN_FLICK, SKILLS, TANGENT_DIV, SWEET_DIV,
+  MIN_FLICK, SKILLS, TANGENT_DIV, solveSweet,
 };
 
 if (require.main === module) {
   const N = Number(process.argv[2] || 300);
   const SEED = Number(process.argv[3] || 12345);
-  console.log('TANGENT_DIV=' + TANGENT_DIV + '  SWEET_DIV=' + SWEET_DIV + '  (main.js 에서 읽음)');
+  console.log('TANGENT_DIV=' + TANGENT_DIV + ' (main.js 에서 읽음) · sweet 은 닫힌 해 (R15)');
   console.log('시드 ' + SEED + ' · ' + N + '회/맵 · 찐득맨 · 평균 플레이어');
   console.log('');
   console.log('맵      부착률  퍼펙트  커브   스팟률  개별 스팟            버티기p50  최대   점수/던지기');

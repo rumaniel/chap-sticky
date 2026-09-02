@@ -9,20 +9,19 @@
  * 밀려난다 — 실제로 그랬다 (R14).
  *
  * 사용: node tools/sim/gauge.js
- *       TANGENT_DIV=1.25 SWEET_DIV=1.02 node tools/sim/gauge.js   (후보 실험)
+ *       TANGENT_DIV=1.25 node tools/sim/gauge.js                  (후보 실험)
  */
 const S = require('./sim.js');
-const { ST, T, gaugeBand, MIN_FLICK, TANGENT_DIV, SWEET_DIV } = S;
+const { ST, T, gaugeBand, MIN_FLICK, TANGENT_DIV } = S;
 
-const PERFECT_BAND = (() => {
+const PERFECT_BASE = (() => {
   const fs = require('fs'), path = require('path');
   const src = fs.readFileSync(path.resolve(__dirname, '..', '..', 'game', 'js', 'sticky.js'), 'utf8');
-  const m = src.match(/const\s+PERFECT_BAND\s*=\s*([0-9.]+)/);
-  if (!m) throw new Error('sticky.js 에서 PERFECT_BAND 를 못 찾았다');
+  const m = src.match(/const\s+PERFECT_BASE\s*=\s*([0-9.]+)/);
+  if (!m) throw new Error('sticky.js 에서 PERFECT_BASE 를 못 찾았다');
   return Number(m[1]);
 })();
 const SWEET = ST.Sticky.SWEET;
-const LO = SWEET - PERFECT_BAND, HI = SWEET + PERFECT_BAND;
 
 /* 던지기 1회 → 충격비 r 과 결과 */
 function shoot(shape, map, relX, relY, flick) {
@@ -44,8 +43,8 @@ function shoot(shape, map, relX, relY, flick) {
   return null;
 }
 
-console.log('TANGENT_DIV=' + TANGENT_DIV + '  SWEET_DIV=' + SWEET_DIV);
-console.log('SWEET=' + SWEET + '  PERFECT_BAND=' + PERFECT_BAND + '  → 퍼펙트 구간 r ' + LO.toFixed(3) + '~' + HI.toFixed(3));
+console.log('TANGENT_DIV=' + TANGENT_DIV + ' · sweet 은 닫힌 해 (R15)');
+console.log('SWEET=' + SWEET + '  PERFECT_BASE=' + PERFECT_BASE + ' (밴드는 던지기마다 민감도에 비례, R15)');
 console.log('');
 
 // ── 검사 1: 표시 limit 이하인데 튕기는가 ─────────────────────────────

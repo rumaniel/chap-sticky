@@ -18,9 +18,36 @@ window.ST = window.ST || {};
   const TOY_R = 0.17;
   const SWEET = 0.62;
   const SWEET_HARD = 0.55; // 과속 쪽 품질 하락 완만화 (기존 1-SWEET=0.38)
-  // 퍼펙트 판정 폭 |r - SWEET|. 예전 기준 q>0.9 는 r 0.42~0.79 로 부착 범위의 37% 라
-  // 평균 플레이어의 78% 가 퍼펙트를 받았다 (R10). 실측으로 약 1/5 폭까지 좁혔다.
-  const PERFECT_BAND = 0.035;
+  /* 퍼펙트 판정 폭 |r - SWEET|. 예전 기준 q>0.9 는 r 0.42~0.79 로 부착 범위의 37% 라
+   * 평균 플레이어의 78% 가 퍼펙트를 받았다 (R10).
+   *
+   * 폭을 고정하면 안 된다 (R15). r 은 충격비라, 플레이어가 실제로 조절하는 "던지기
+   * 세기" 로 환산했을 때의 폭이 던지기마다 달라진다. 원인은 접선 항(0.35·tangent)이
+   * 속도에 대해 부호를 뒤집는 것이다 —
+   *
+   *   도착 시점에 아직 올라가는 중(vy>0)이면 세기를 올릴 때 |vy| 도 같이 커져
+   *   r 이 민감해진다. 이미 내려오는 중(vy<0)이면 |vy| 가 줄어 vz 증가를 상쇄해
+   *   둔감해진다. 분기는 도착이 궤적 정점이 되는 s ≈ 1.30 px/ms.
+   *
+   * 고정 폭이던 시절 실측: 세기 기준 폭이 칠판 8.1% / 거실 7.7% / 냉장고 28.0% 로
+   * 갈렸고 퍼펙트율이 22% vs 62% 가 됐다. 냉장고 sweet(1.17)이 분기점 아래라
+   * 퍼펙트 구간이 3배 넓었던 것이다 — 맵 개성이 아니라 좌표계 문제다.
+   *
+   * 그래서 밴드를 민감도에 비례시켜 세기 기준 폭을 일정하게 만든다:
+   *   s = vz/KZ,  d(tangent)/ds = sign(vy)·(2·KY − vy/s),  민감도 = KZ + 0.35·d(tangent)/ds
+   * 비스듬한 던지기는 tangent 가 |vy| 가 아니라 hypot(vx,vy) 라 식이 어긋나므로
+   * 배율에 상·하한을 둔다. 검증: node tools/sim/gauge.js */
+  const PERFECT_BASE = 0.0245;
+  const PERFECT_SENS_MIN = 0.35;
+  const PERFECT_SENS_MAX = 1.80;
+
+  function perfectBand(impact) {
+    const T = ST.Physics.TUNE;
+    const s = Math.max(0.1, impact.vz / T.KZ);
+    const dTan = Math.sign(impact.vy) * (2 * T.KY - impact.vy / s);
+    const scale = (T.KZ + 0.35 * dTan) / T.KZ;
+    return PERFECT_BASE * Math.max(PERFECT_SENS_MIN, Math.min(PERFECT_SENS_MAX, scale));
+  }
   const SWING_MAX = 1.05;
 
   // v2 튜닝 (시뮬로 조정)
@@ -150,7 +177,7 @@ window.ST = window.ST || {};
 
       return {
         stuck: true, contacts, adhesion, impulse, speed, geoF,
-        quality: q, gh, perfect: Math.abs(r - SWEET) < PERFECT_BAND, mat: centerMat || map.mat,
+        quality: q, gh, perfect: Math.abs(r - SWEET) < perfectBand(impact), mat: centerMat || map.mat,
       };
     },
 
