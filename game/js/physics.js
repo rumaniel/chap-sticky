@@ -80,7 +80,7 @@ window.ST = window.ST || {};
       const N = 2; // 서브스텝
       for (let i = 0; i < N; i++) {
         const h = dt / N;
-        const px = f.x, py = f.y, pz = f.z, pvx = f.vx, pvy = f.vy, pa = f.angle;
+        const px = f.x, py = f.y, pz = f.z, pvx = f.vx, pvy = f.vy, pa = f.angle, pspin = f.spin;
         f.vy -= TUNE.GRAVITY * h;
         f.vx += TUNE.MAGNUS * f.spin * f.vz * h;
         f.spin *= 1 - TUNE.SPIN_DECAY * h;
@@ -100,6 +100,9 @@ window.ST = window.ST || {};
           f.vx = pvx + (f.vx - pvx) * u;
           f.vy = pvy + (f.vy - pvy) * u;
           f.angle = pa + (f.angle - pa) * u;
+          // spin 도 충돌 시점까지만 감쇠 — resolveImpact 가 impact.spin/angle 로 패드 접촉을
+          // 정하므로 여기만 서브스텝 끝 값이면 판정이 다시 dt 에 묶인다 (Copilot 지적).
+          f.spin = pspin * (1 - TUNE.SPIN_DECAY * h * u);
           f.z = TUNE.WALL_Z;
           const inWall =
             f.x > -TUNE.WALL_W / 2 && f.x < TUNE.WALL_W / 2 &&

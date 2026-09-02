@@ -15,9 +15,9 @@ const { ST, T, gaugeBand, MIN_FLICK } = S;
 const SWEET = ST.Sticky.SWEET;
 
 /* 던지기 1회 → 충격비 r 과 결과. dts 를 주면 프레임 길이 배열을 순환한다 (히치 재현). */
-function shoot(shape, map, relX, relY, flick, dts) {
+function shoot(shape, map, relX, relY, flick, dts, spin) {
   const hold = ST.Physics.unproject(relX, relY, T.HOLD_Z);
-  const f = ST.Physics.makeThrow(flick, 0, hold);
+  const f = ST.Physics.makeThrow(flick, spin || 0, hold);
   for (let i = 0; i < 900; i++) {
     const hit = ST.Physics.stepFlight(f, dts ? dts[i % dts.length] : 1 / 60);
     if (!hit) continue;
@@ -27,7 +27,9 @@ function shoot(shape, map, relX, relY, flick, dts) {
       r: res.adhesion ? ST.Sticky.impulseOf(hit, shape) / (res.adhesion * ST.Sticky.K_MAX) : null,
       perfect: !!res.perfect,
       bounce: res.reason === 'bounce',
-      full: res.contacts ? res.contacts.size === shape.stickyPoints.length : false,
+      // 접착이 실제로 계산된 경우만 "전패드 접촉" — nogrip 경로는 contacts 에 기하 후보만
+      // 담겨 돌아와서 size 만 보면 통과해 버린다 (Copilot 지적)
+      full: !!res.adhesion && res.contacts.size === shape.stickyPoints.length,
       y: hit.y,
     };
   }
@@ -137,17 +139,20 @@ let dMax = 0, miss4 = 0, n4 = 0;
 for (const shape of ST.Shapes.list) {
   for (const map of ST.Materials.list) {
     const B = gaugeBand(shape, map);
-    const base = shoot(shape, map, 240, 560, straight(B.sweet));
-    if (!base || !base.full) continue;
-    for (const hitch of [0.05, 0.1]) {
-      // 정상 프레임 n 개 뒤 히치 — 벽 직전에 걸리도록 여러 위치 시도
-      for (let n = 8; n <= 24; n += 2) {
-        const dts = []; for (let i = 0; i < n; i++) dts.push(1 / 60); dts.push(hitch);
-        const r = shoot(shape, map, 240, 560, straight(B.sweet), dts);
-        if (!r || !r.full) continue;
-        n4++;
-        dMax = Math.max(dMax, Math.abs(r.r - base.r));
-        if (base.perfect && !r.perfect) miss4++;
+    // 스핀 던지기도 포함 — 보간에서 spin 을 빼먹으면 impact.spin/angle 이 dt 에 묶인다
+    for (const spin of [0, 20]) {
+      const base = shoot(shape, map, 240, 560, straight(B.sweet), null, spin);
+      if (!base || !base.full) continue;
+      for (const hitch of [0.05, 0.1]) {
+        // 정상 프레임 n 개 뒤 히치 — 벽 직전에 걸리도록 여러 위치 시도
+        for (let n = 8; n <= 24; n += 2) {
+          const dts = []; for (let i = 0; i < n; i++) dts.push(1 / 60); dts.push(hitch);
+          const r = shoot(shape, map, 240, 560, straight(B.sweet), dts, spin);
+          if (!r || !r.full) continue;
+          n4++;
+          dMax = Math.max(dMax, Math.abs(r.r - base.r));
+          if (base.perfect && !r.perfect) miss4++;
+        }
       }
     }
   }
