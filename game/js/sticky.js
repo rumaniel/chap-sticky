@@ -18,6 +18,9 @@ window.ST = window.ST || {};
   const TOY_R = 0.17;
   const SWEET = 0.62;
   const SWEET_HARD = 0.55; // 과속 쪽 품질 하락 완만화 (기존 1-SWEET=0.38)
+  // 퍼펙트 판정 폭 |r - SWEET|. 예전 기준 q>0.9 는 r 0.42~0.79 로 부착 범위의 37% 라
+  // 평균 플레이어의 78% 가 퍼펙트를 받았다 (R10). 실측으로 약 1/5 폭까지 좁혔다.
+  const PERFECT_BAND = 0.035;
   const SWING_MAX = 1.05;
 
   // v2 튜닝 (시뮬로 조정)
@@ -147,7 +150,7 @@ window.ST = window.ST || {};
 
       return {
         stuck: true, contacts, adhesion, impulse, speed, geoF,
-        quality: q, gh, perfect: q > 0.9, mat: centerMat || map.mat,
+        quality: q, gh, perfect: Math.abs(r - SWEET) < PERFECT_BAND, mat: centerMat || map.mat,
       };
     },
 
