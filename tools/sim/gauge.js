@@ -81,6 +81,7 @@ console.log('');
 console.log('=== 검사 2: 표시 sweet 로 똑바로 던지면 퍼펙트인가 (릴리즈 x 5 × y 3, 전패드만) ===');
 console.log('모형   맵       구간        sweet    limit    r@sweet  퍼펙트');
 let ok2 = 0, all2 = 0;
+const empty2 = []; // 전패드 샘플이 0인 조합 — 건너뛰면 검증 안 한 채 통과한다 (Copilot 지적)
 for (const shape of ST.Shapes.list) {
   for (const map of ST.Materials.list) {
     const B = gaugeBand(shape, map);
@@ -91,6 +92,7 @@ for (const shape of ST.Shapes.list) {
       t++; if (r.perfect) h++; rs.push(r.r);
     }
     ok2 += h; all2 += t;
+    if (t === 0) empty2.push(shape.id + '/' + map.id);
     const rMean = rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : NaN;
     console.log(
       shape.id.padEnd(6), map.id.padEnd(8), B.branch.padEnd(11),
@@ -100,7 +102,8 @@ for (const shape of ST.Shapes.list) {
     );
   }
 }
-verdict(ok2 === all2, '마커 적중 시 퍼펙트 ' + ok2 + '/' + all2);
+verdict(ok2 === all2 && empty2.length === 0, '마커 적중 시 퍼펙트 ' + ok2 + '/' + all2
+  + (empty2.length ? ' · 전패드 샘플 없는 조합: ' + empty2.join(', ') : ' · 12/12 조합 검증'));
 
 // ── 검사 3: 퍼펙트 구간 — 세기 기준 폭이 같고, 구간이 하나인가 ─────────────
 // 조합마다 전패드 접촉이 되는 릴리즈 x 를 고른다 (유리창은 정중앙이 창틀이다).
