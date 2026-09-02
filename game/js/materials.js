@@ -5,7 +5,14 @@
  * noGrip: 같은 벽면 안의 그립 없는 세부 영역(창틀·테두리 등) — 멀티 머테리얼 존
  * rings: 과녁 (벽 정규화 좌표, 반경은 min(w,h) 비율), mults 배율
  * ringStyle: 맵별 과녁 표현(은은한 힌트)
- * spots: 보너스 스팟
+ * spots: 보너스 스팟. 좌표는 벽 정규화(x 0=좌, y 0=위). 제약 두 가지 —
+ *   (1) 크롤 경로가 실제로 지나는 구간 안에 둔다. 도달 가능 영역은 대략
+ *       x 0.23~0.77 / y 0.22~0.95. 밖에 두면 영영 닿지 않는다 (R9).
+ *   (2) 판정 원끼리 겹치면 안 된다. 판정 반경은 그려지는 원보다 크다
+ *       (score.js: r*min(WALL_W,WALL_H) + TOY_R*0.5). 겹치면 두 스팟 어디에도
+ *       안 닿아 보이는 자리에서 둘 다 터진다 (R13). r=0.06 이면 중심거리 > 0.50m,
+ *       즉 정규화로 x 차 0.16 / y 차 0.19 이상 떨어뜨려야 한다.
+ * 배치를 바꿨으면 tools/sim 으로 접촉률을 다시 잰다.
  */
 window.ST = window.ST || {};
 
@@ -20,8 +27,8 @@ window.ST = window.ST || {};
       rings: { cx: 0.5, cy: 0.50, radii: [0.10, 0.20, 0.31, 0.44], mults: [5, 3, 2, 1] },
       ringStyle: { color: 'rgba(130,95,60,0.5)', dash: [9, 8] }, // 벽지 얼룩 느낌
       spots: [
-        { x: 0.14, y: 0.16, r: 0.055, bonus: 150, icon: '★' },
-        { x: 0.86, y: 0.62, r: 0.055, bonus: 150, icon: '★' },
+        { x: 0.32, y: 0.70, r: 0.055, bonus: 150, icon: '★' },
+        { x: 0.66, y: 0.58, r: 0.055, bonus: 150, icon: '★' },
       ],
       drawWall(ctx, W, H) {
         // 크림 벽지 + 세로 스트라이프
@@ -81,8 +88,8 @@ window.ST = window.ST || {};
       rings: { cx: 0.74, cy: 0.27, radii: [0.09, 0.17, 0.26, 0.36], mults: [6, 4, 2, 1] },
       ringStyle: { color: 'rgba(255,255,255,0.5)', dash: [4, 7] }, // 김서림 낙서
       spots: [
-        { x: 0.18, y: 0.70, r: 0.055, bonus: 200, icon: '🐦' },
-        { x: 0.82, y: 0.18, r: 0.055, bonus: 200, icon: '☀' },
+        { x: 0.34, y: 0.82, r: 0.055, bonus: 200, icon: '🐦' },
+        { x: 0.66, y: 0.72, r: 0.055, bonus: 200, icon: '☀' },
       ],
       drawWall(ctx, W, H) {
         // 하늘 그라디언트
@@ -125,8 +132,8 @@ window.ST = window.ST || {};
       rings: { cx: 0.5, cy: 0.50, radii: [0.10, 0.20, 0.31, 0.44], mults: [4, 3, 2, 1] },
       ringStyle: { color: 'rgba(255,255,255,0.45)', dash: [7, 6] }, // 분필 원
       spots: [
-        { x: 0.15, y: 0.20, r: 0.06, bonus: 120, icon: '100' },
-        { x: 0.85, y: 0.24, r: 0.06, bonus: 120, icon: 'A+' },
+        { x: 0.30, y: 0.62, r: 0.06, bonus: 120, icon: '100' },
+        { x: 0.68, y: 0.55, r: 0.06, bonus: 120, icon: 'A+' },
       ],
       drawWall(ctx, W, H) {
         ctx.fillStyle = '#2e5c46';
@@ -161,9 +168,9 @@ window.ST = window.ST || {};
       rings: { cx: 0.5, cy: 0.46, radii: [0.09, 0.18, 0.29, 0.42], mults: [5, 3, 2, 1] },
       ringStyle: { color: 'rgba(120,140,160,0.45)', dash: [2, 9], magnets: true }, // 자석 배열
       spots: [
-        { x: 0.2, y: 0.14, r: 0.06, bonus: 300, icon: '🧲' },
-        { x: 0.8, y: 0.30, r: 0.06, bonus: 300, icon: '🧲' },
-        { x: 0.28, y: 0.72, r: 0.06, bonus: 300, icon: '🧲' },
+        { x: 0.30, y: 0.78, r: 0.06, bonus: 300, icon: '🧲' },
+        { x: 0.66, y: 0.70, r: 0.06, bonus: 300, icon: '🧲' },
+        { x: 0.62, y: 0.92, r: 0.06, bonus: 300, icon: '🧲' },
       ],
       drawWall(ctx, W, H) {
         const g = ctx.createLinearGradient(0, 0, W, 0);
