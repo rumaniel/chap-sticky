@@ -108,7 +108,7 @@ verdict(ok2 === all2, '마커 적중 시 퍼펙트 ' + ok2 + '/' + all2);
 console.log('');
 console.log('=== 검사 3: 퍼펙트 세기 구간 (전패드 접촉만) — 구간 수는 1 이어야 한다 ===');
 console.log('모형   맵       릴리즈x  구간수  폭(sweet대비)  구간');
-const widths = [];
+const widths = [], g3 = {};
 for (const shape of ST.Shapes.list) {
   for (const map of ST.Materials.list) {
     const B = gaugeBand(shape, map);
@@ -128,6 +128,7 @@ for (const shape of ST.Shapes.list) {
     if (cur) iv.push(cur);
     const total = iv.reduce((a, v) => a + (v[1] - v[0]), 0) / B.sweet * 100;
     widths.push(total);
+    g3[shape.id + '/' + map.id] = { sweet: +B.sweet.toFixed(4), limit: +B.limit.toFixed(4), width: +total.toFixed(1), intervals: iv.length, rel: [relX, relY] };
     console.log(
       shape.id.padEnd(6), map.id.padEnd(8), String(relX).padStart(6), String(iv.length).padStart(6),
       (total.toFixed(1) + '%').padStart(13), '  ' + iv.map((v) => v[0].toFixed(3) + '~' + v[1].toFixed(3)).join('  '),
@@ -141,12 +142,26 @@ verdict(wMax / wMin < 2.0, '세기 기준 폭 ' + wMin.toFixed(1) + '% ~ ' + wMa
 
 // ── 검사 4: 프레임 히치 — 50ms/100ms 프레임이 끼어도 같은 던지기가 퍼펙트인가 ──
 console.log('');
-console.log('=== 검사 4: 프레임 히치 — 같은 던지기는 프레임 스케줄과 무관하게 같은 결과여야 한다 ===');
-// 60fps 기준선과, 벽 직전에 50ms/100ms 프레임을 끼운 스케줄을 비교한다. 위치·접촉 수·
-// 결과(stuck/bounce/nogrip)·퍼펙트가 하나라도 다르면 실패. 부분 접촉 던지기도 버리지
-// 않는다 — 리뷰가 잡은 재현(유리창, 릴리즈 (180,390))이 정확히 "히치로 발 두 개가
-// 창틀에 빠지는" 케이스였다. 스핀 던지기 포함.
-const RELS4 = [[240, 560], [180, 390], [300, 500], [210, 620]];
+console.log('=== 검사 4: 프레임 스케줄 — 같은 던지기는 주사율·히치·지터와 무관하게 같은 결과여야 한다 ===');
+// 60fps 기준선과 다른 스케줄을 비교한다. 위치·접촉 수·결과(stuck/bounce/nogrip)·퍼펙트가
+// 하나라도 다르면 실패. 부분 접촉 던지기도 버리지 않는다 — 리뷰가 잡은 재현 둘 다
+// (유리창 (180,390) 100ms 히치 → 발 두 개 창틀에 빠짐 / 유리창 (60,410) 0.9×sweet 에서
+// 60Hz 부착 vs 120Hz 튕김) 정확히 "접촉 수가 달라지는" 케이스였다.
+// 스케줄: 벽 직전 50/100ms 히치 9곳 + 90/120/144Hz 고정 + 30~72fps 지터.
+const RELS4 = [[240, 560], [180, 390], [300, 500], [210, 620], [60, 410]];
+const RATES = [90, 120, 144];
+const JITTER = [1 / 60, 1 / 45, 1 / 72, 1 / 60, 1 / 30, 1 / 55, 1 / 66, 1 / 60];
+function schedules() {
+  const out = [];
+  for (const hitch of [0.05, 0.1]) for (let n = 8; n <= 24; n += 2) {
+    const dts = []; for (let i = 0; i < n; i++) dts.push(1 / 60); dts.push(hitch);
+    out.push({ name: 'hitch' + hitch + '@' + n, dts });
+  }
+  for (const hz of RATES) out.push({ name: hz + 'Hz', dts: [1 / hz] });
+  out.push({ name: 'jitter', dts: JITTER });
+  return out;
+}
+const SCHED = schedules();
 let dMax = 0, dyMax = 0, bad4 = 0, n4 = 0;
 const combos4 = new Set();
 for (const shape of ST.Shapes.list) {
@@ -154,12 +169,11 @@ for (const shape of ST.Shapes.list) {
     const B = gaugeBand(shape, map);
     for (const spin of [0, 20]) {
       for (const rel of RELS4) {
-        const base = shoot(shape, map, rel[0], rel[1], straight(B.sweet), null, spin);
-        if (base.outcome === 'none') continue; // 벽에 안 닿는 릴리즈는 비교 대상이 아니다
-        for (const hitch of [0.05, 0.1]) {
-          for (let n = 8; n <= 24; n += 2) {
-            const dts = []; for (let i = 0; i < n; i++) dts.push(1 / 60); dts.push(hitch);
-            const r = shoot(shape, map, rel[0], rel[1], straight(B.sweet), dts, spin);
+        for (const k of [0.9, 1.0]) {
+          const base = shoot(shape, map, rel[0], rel[1], straight(B.sweet * k), null, spin);
+          if (base.outcome === 'none') continue; // 벽에 안 닿는 릴리즈는 비교 대상이 아니다
+          for (const sc of SCHED) {
+            const r = shoot(shape, map, rel[0], rel[1], straight(B.sweet * k), sc.dts, spin);
             n4++; combos4.add(shape.id + '/' + map.id);
             const dy = Math.hypot(r.x - base.x, r.y - base.y);
             dyMax = Math.max(dyMax, dy);
@@ -168,8 +182,8 @@ for (const shape of ST.Shapes.list) {
               && r.perfect === base.perfect && dy < 1e-6;
             if (!same) {
               bad4++;
-              if (bad4 <= 5) console.log('  차이: ' + shape.id + '/' + map.id + ' rel(' + rel + ') spin' + spin
-                + ' hitch' + hitch + ' n' + n + ' → ' + base.outcome + '/' + base.contacts + '/' + base.perfect
+              if (bad4 <= 6) console.log('  차이: ' + shape.id + '/' + map.id + ' rel(' + rel + ') ×' + k + ' spin' + spin
+                + ' ' + sc.name + ' → ' + base.outcome + '/' + base.contacts + '/' + base.perfect
                 + ' vs ' + r.outcome + '/' + r.contacts + '/' + r.perfect + ' Δpos ' + dy.toFixed(5));
             }
           }
@@ -179,7 +193,7 @@ for (const shape of ST.Shapes.list) {
   }
 }
 verdict(bad4 === 0 && combos4.size === ST.Shapes.list.length * ST.Materials.list.length,
-  '히치로 결과가 바뀐 케이스 ' + bad4 + '/' + n4 + ' (조합 ' + combos4.size + '/12) · 최대 Δpos ' + dyMax.toExponential(2) + ' · 최대 |Δr| ' + dMax.toExponential(2));
+  '스케줄로 결과가 바뀐 케이스 ' + bad4 + '/' + n4 + ' (조합 ' + combos4.size + '/12, 스케줄 ' + SCHED.length + '종) · 최대 Δpos ' + dyMax.toExponential(2) + ' · 최대 |Δr| ' + dMax.toExponential(2));
 
 // ── 검사 5: 저그립 절벽 여유 — sweet 닫힌 해의 판별식이 0 이 되는 grip 과의 거리 ──
 console.log('');
@@ -198,6 +212,32 @@ console.log('=== 검사 5: 판별식 절벽 여유 (grip 이 이 아래로 가�
       row.push(map.id + ' ' + (B.branch === 'ascending' ? '상승' : margin.toFixed(0) + '%'));
     }
     console.log('  ' + shape.id.padEnd(6) + '절벽 grip ' + gripCliff.toFixed(3) + '   ' + row.join('  '));
+  }
+}
+
+// ── 게이지 스냅샷: --update 로 tools/sim/gauge-baseline.json 저장, --check 로 비교 ──
+// 문서의 sweet/limit/퍼펙트 폭은 이 파일에서 나온다. 검사 3 의 폭이 바뀌면 여기서 걸린다.
+{
+  const fs = require('fs'), path = require('path');
+  const file = path.join(__dirname, 'gauge-baseline.json');
+  const mode = process.argv.includes('--update') ? 'update' : process.argv.includes('--check') ? 'check' : null;
+  if (mode === 'update') {
+    fs.writeFileSync(file, JSON.stringify(g3, null, 2) + '\n');
+    console.log('');
+    console.log('gauge-baseline.json 갱신.');
+  } else if (mode === 'check') {
+    const base = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const diffs = [];
+    const keys = new Set([...Object.keys(base), ...Object.keys(g3)]);
+    for (const k of keys) {
+      if (!base[k]) { diffs.push(k + ': baseline 에 없음'); continue; }
+      if (!g3[k]) { diffs.push(k + ': 현재 결과에 없음'); continue; }
+      for (const f of ['sweet', 'limit', 'width', 'intervals']) if (base[k][f] !== g3[k][f]) diffs.push(k + '.' + f + ': baseline ' + base[k][f] + ' / now ' + g3[k][f]);
+    }
+    for (const s of ST.Shapes.list) for (const m of ST.Materials.list) if (!base[s.id + '/' + m.id]) diffs.push(s.id + '/' + m.id + ': baseline 에 없음');
+    console.log('');
+    if (diffs.length) { console.log('gauge-baseline.json 과 다르다:'); diffs.forEach((d) => console.log('  ' + d)); fails++; }
+    else console.log('gauge-baseline.json 과 일치.');
   }
 }
 

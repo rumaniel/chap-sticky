@@ -23,7 +23,7 @@ window.ST = window.ST || {};
     VZ_MIN: 3.2, VZ_MAX: 12.5,
     KSPIN: 1.05, SPIN_MAX: 32,   // rad/s
   };
-  const H_MAX = 1 / 120; // 비행 적분 서브스텝 상한 (s)
+  const H_STEP = 1 / 120; // 비행 적분 고정 스텝 (s). 60fps 프레임 = 정확히 2스텝
 
   const Physics = {
     TUNE,
@@ -80,14 +80,17 @@ window.ST = window.ST || {};
     // 같은 던지기는 프레임 스케줄과 무관하게 같은 곳에 같은 상태로 닿아야 한다 —
     // tools/sim/gauge.js 검사 4 가 히치 프레임을 끼워 위치·접촉·판정 동일성을 확인한다.
     stepFlight(f, dt) {
-      // 서브스텝 크기를 고정한다 (최대 1/120 s). 예전엔 N=2 고정이라 스텝이 프레임 길이에
-      // 비례했고, 100ms 히치 한 프레임이면 벽 앞까지 누적된 위치가 2cm 틀어져 유리창
-      // 창틀에서 발 두 개가 빠지고 튕겼다 (R15 리뷰). 60fps 에서는 예전과 똑같이 2스텝.
-      // dt/H_MAX 가 정수일 때 부동소수점 오차로 한 스텝 더 생기지 않게 엡실론을 뺀다
-      // (1/60 ÷ 1/120 = 2.0000000000000004 → ceil 3). 그러면 60fps 는 h=1/120 그대로.
-      const N = Math.max(2, Math.ceil(dt / H_MAX - 1e-6));
-      const h = dt / N;
-      for (let i = 0; i < N; i++) {
+      // 고정 타임스텝 누적기. 프레임 시간을 누적해 두고 정확히 H_STEP 씩만 적분한다 —
+      // 나머지는 다음 프레임으로 이월. 60/90/120/144Hz 어디서든, 히치가 끼어도, 스텝 열이
+      // 동일하므로 같은 던지기는 비트 단위로 같은 곳에 닿는다.
+      //
+      // 이력: 처음엔 N=2 고정(스텝이 프레임에 비례 → 100ms 히치면 착탄 2cm 이동, 유리창
+      // 창틀에서 튕김), 다음엔 N=ceil(dt/H) (60Hz 는 맞췄지만 max(2,·) 때문에 120Hz 가
+      // 1/240 스텝이 돼 60Hz 와 결과가 달랐다). 둘 다 적대적 리뷰가 재현했다 (R15).
+      f.acc = (f.acc || 0) + dt;
+      while (f.acc >= H_STEP - 1e-9) {
+        f.acc -= H_STEP;
+        const h = H_STEP;
         const px = f.x, py = f.y, pz = f.z, pvx = f.vx, pvy = f.vy, pa = f.angle, pspin = f.spin;
         f.vy -= TUNE.GRAVITY * h;
         f.vx += TUNE.MAGNUS * f.spin * f.vz * h;

@@ -232,11 +232,23 @@ if (require.main === module) {
     } else {
       const base = JSON.parse(fs.readFileSync(file, 'utf8'));
       const diffs = [];
+      // 양방향 비교 — 한쪽 키만 돌면 빈/부분 baseline 이 통과한다 (리뷰가 재현한 false-pass).
+      // 스키마도 본다: 레지스트리의 맵·모형이 전부 있어야 한다.
       const walk = (a, b, p) => {
-        if (a && typeof a === 'object') { for (const k of Object.keys(a)) walk(a[k], b && b[k], p + '.' + k); }
-        else if (a !== b) diffs.push(p + ': baseline ' + a + ' / now ' + b);
+        const isObj = (v) => v && typeof v === 'object';
+        if (isObj(a) || isObj(b)) {
+          if (!isObj(a) || !isObj(b)) { diffs.push(p + ': 구조 불일치'); return; }
+          const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+          for (const k of keys) {
+            if (!(k in a)) diffs.push(p + '.' + k + ': baseline 에 없음');
+            else if (!(k in b)) diffs.push(p + '.' + k + ': 현재 결과에 없음');
+            else walk(a[k], b[k], p + '.' + k);
+          }
+        } else if (a !== b) diffs.push(p + ': baseline ' + a + ' / now ' + b);
       };
       walk(base, snap, '');
+      for (const m of ST.Materials.list) if (!base.maps || !base.maps[m.id]) diffs.push('maps.' + m.id + ': baseline 에 없음');
+      for (const s of ST.Shapes.list) if (!base.holds || !base.holds[s.id]) diffs.push('holds.' + s.id + ': baseline 에 없음');
       console.log('');
       if (diffs.length) {
         console.log('baseline.json 과 다르다 (' + diffs.length + '곳). 의도한 변경이면 --update 후 문서를 고칠 것:');
