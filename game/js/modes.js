@@ -120,8 +120,10 @@ window.ST = window.ST || {};
 
     _finish() {
       const s = session;
-      const sum = s.players.reduce((a, p) => a + p.total, 0);
-      ST.Score.addEarned(sum);
+      // 해금 누적은 최고 1인 점수만. 전원 합이면 8인 파티 한 판이 연습 8판이라
+      // 임계값이 무의미해진다 (R12). 파티 한 판 = 연습 한 판과 같은 무게.
+      const best = s.players.reduce((a, p) => Math.max(a, p.total), 0);
+      ST.Score.addEarned(best);
       ST.Audio.play('fanfare');
       setTimeout(() => ST.UI.showResult(s), 700);
     },

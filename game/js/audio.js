@@ -73,7 +73,6 @@ window.ST = window.ST || {};
   const SFX = {
     ui() { tone('square', 660, 880, 0.08, 0.12); },
     grab() { tone('sine', 300, 380, 0.06, 0.1); },
-    spin() { tone('sine', 500 + Math.random() * 300, 700, 0.05, 0.05); },
     // 스핀 슉슉 (홀드 중 강하게, 비행 중 약하게)
     swish(vol) { noise(0.09, vol || 0.28, 1100, 3400, { q: 1.6, attack: 0.012 }); },
     // 포인트 분리 "뽁"
