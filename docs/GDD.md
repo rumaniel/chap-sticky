@@ -30,8 +30,9 @@
               sweet = r(s)=SWEET 의 닫힌 해 (이차식). 상수로 나누면 맵마다 ±0.03 오차가 나
               마커대로 던져도 퍼펙트가 안 나온다 (R14·R15). 근이 없는 저그립이면 최소점.
               수식은 전부 sticky.js (ST.Sticky.gaugeBand / perfectBand) — 게임과 시뮬 공용.
-벽 충돌      : 서브스텝 안에서 z=WALL_Z 로 선형 보간 (physics.js stepFlight). 프레임 길이와
-              무관하게 같은 던지기는 같은 착탄 — 히치 342케이스(스핀 포함) |Δr| ≤ 0.00002 (R15)
+벽 충돌      : 서브스텝 크기 고정(≤1/120s, 60fps 는 2스텝) + 서브스텝 안에서 z=WALL_Z 로
+              위치·속도·angle·spin 선형 보간 (physics.js stepFlight). 프레임 스케줄과 무관하게
+              같은 던지기는 비트 단위로 같은 착탄 — 히치 1,728케이스 Δpos = 0 (R15)
               검증: node tools/sim/gauge.js (검사 5종)
 ```
 

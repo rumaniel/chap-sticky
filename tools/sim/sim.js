@@ -166,14 +166,24 @@ module.exports = {
 };
 
 if (require.main === module) {
-  const N = Number(process.argv[2] || 300);
-  const SEED = Number(process.argv[3] || 12345);
+  // 플래그(--update/--check)는 위치 인자에서 뺀다 — 안 빼면 Number('--update') = NaN 이
+  // 시드로 들어가 srand(NaN)=0 으로 돌고, 수치가 조용히 달라진다 (실제로 한 번 당했다).
+  const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+  const N = Number(args[0] || 300);
+  const SEED = Number(args[1] || 12345);
+  if (!Number.isFinite(N) || !Number.isFinite(SEED)) throw new Error('usage: sim.js [n] [seed] [--update|--check]');
+  // --update: 결과를 tools/sim/baseline.json 에 저장 / --check: 저장본과 비교, 다르면 exit 1.
+  // 문서의 수치는 이 baseline 에서 나온다 — 물리를 바꾸면 --check 가 먼저 깨지고,
+  // --update 로 갱신한 뒤 문서를 고친다. 문서가 조용히 낡는 걸 막는 장치 (R15 리뷰 지적).
+  const MODE = process.argv.includes('--update') ? 'update' : process.argv.includes('--check') ? 'check' : null;
+  const rows = {}, holds = {};
   console.log('TANGENT_K=' + ST.Sticky.TANGENT_K + ' TANGENT_DIV=' + TANGENT_DIV + ' PERFECT_BASE=' + ST.Sticky.PERFECT_BASE + ' (sticky.js)');
   console.log('시드 ' + SEED + ' · ' + N + '회/맵 · 찐득맨 · 평균 플레이어');
   console.log('');
   console.log('맵      부착률  퍼펙트  커브   스팟률  개별 스팟            버티기p50  최대   점수/던지기');
   for (const map of ST.Materials.list) {
     const r = measure(ST.Shapes.get('man'), map, 'avg', N, SEED);
+    rows[map.id] = r;
     console.log(
       map.id.padEnd(7),
       (r.stuckPct.toFixed(1) + '%').padStart(6),
@@ -191,11 +201,50 @@ if (require.main === module) {
   console.log('모형    p50     p90     최대');
   for (const shape of ST.Shapes.list) {
     const r = measure(shape, ST.Materials.get('chalk'), 'avg', N, SEED);
+    holds[shape.id] = r;
     console.log(
       shape.id.padEnd(7),
       (r.hold50.toFixed(1) + 's').padStart(6),
       (r.hold90.toFixed(1) + 's').padStart(7),
       (r.holdMax.toFixed(1) + 's').padStart(7),
     );
+  }
+
+  if (MODE) {
+    const f1 = (v) => Number(v.toFixed(1));
+    const snap = { seed: SEED, n: N, maps: {}, holds: {} };
+    for (const id of Object.keys(rows)) {
+      const r = rows[id];
+      snap.maps[id] = {
+        stuck: f1(r.stuckPct), perfect: f1(r.perfectPct), curve: f1(r.curvePct), spot: f1(r.spotPct),
+        perSpot: r.perSpot.map(f1), hold50: f1(r.hold50), holdMax: f1(r.holdMax), score: Math.round(r.scorePer),
+      };
+    }
+    for (const id of Object.keys(holds)) {
+      const r = holds[id];
+      snap.holds[id] = { p50: f1(r.hold50), p90: f1(r.hold90), max: f1(r.holdMax) };
+    }
+    const file = path.join(__dirname, 'baseline.json');
+    if (MODE === 'update') {
+      fs.writeFileSync(file, JSON.stringify(snap, null, 2) + '\n');
+      console.log('');
+      console.log('baseline.json 갱신. 문서 수치를 이 값으로 맞출 것.');
+    } else {
+      const base = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const diffs = [];
+      const walk = (a, b, p) => {
+        if (a && typeof a === 'object') { for (const k of Object.keys(a)) walk(a[k], b && b[k], p + '.' + k); }
+        else if (a !== b) diffs.push(p + ': baseline ' + a + ' / now ' + b);
+      };
+      walk(base, snap, '');
+      console.log('');
+      if (diffs.length) {
+        console.log('baseline.json 과 다르다 (' + diffs.length + '곳). 의도한 변경이면 --update 후 문서를 고칠 것:');
+        diffs.slice(0, 20).forEach((d) => console.log('  ' + d));
+        process.exitCode = 1;
+      } else {
+        console.log('baseline.json 과 일치.');
+      }
+    }
   }
 }

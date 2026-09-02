@@ -27,12 +27,21 @@ function shoot(shape, map, relX, relY, flick, dts, spin) {
       r: res.adhesion ? ST.Sticky.impulseOf(hit, shape) / (res.adhesion * ST.Sticky.K_MAX) : null,
       perfect: !!res.perfect,
       bounce: res.reason === 'bounce',
+      outcome: res.stuck ? 'stuck' : res.reason,
+      contacts: res.adhesion ? res.contacts.size : 0,
       // 접착이 실제로 계산된 경우만 "전패드 접촉" — nogrip 경로는 contacts 에 기하 후보만
       // 담겨 돌아와서 size 만 보면 통과해 버린다 (Copilot 지적)
       full: !!res.adhesion && res.contacts.size === shape.stickyPoints.length,
-      y: hit.y,
+      x: hit.x, y: hit.y,
     };
   }
+  return { outcome: 'none', contacts: 0, full: false, perfect: false, r: null, x: NaN, y: NaN };
+}
+/* 전패드 접촉이 되는 릴리즈 위치를 x·y 격자에서 찾는다 (유리창은 정중앙이 창틀이다). */
+function fullContactRelease(shape, map, speed) {
+  for (const ry of [560, 500, 620, 440, 680, 380])
+    for (const rx of [240, 270, 210, 300, 180, 330, 150])
+      if (shoot(shape, map, rx, ry, straight(speed)).full) return [rx, ry];
   return null;
 }
 const straight = (sp) => ({ vx: 0, vy: -sp });
@@ -103,16 +112,14 @@ const widths = [];
 for (const shape of ST.Shapes.list) {
   for (const map of ST.Materials.list) {
     const B = gaugeBand(shape, map);
-    let relX = null;
-    for (const rx of [240, 270, 210, 300, 180]) {
-      const r = shoot(shape, map, rx, 560, straight(B.sweet));
-      if (r && r.full) { relX = rx; break; }
-    }
-    if (relX == null) { console.log(shape.id.padEnd(6), map.id.padEnd(8), '  전패드 접촉 릴리즈 없음'); continue; }
+    const rel = fullContactRelease(shape, map, B.sweet);
+    // 건너뛰지 않는다 — 조합 하나라도 못 재면 "전부 통과" 는 거짓 초록이다 (리뷰 지적)
+    if (!rel) { verdict(false, shape.id + '/' + map.id + ' 전패드 접촉 릴리즈를 못 찾음'); continue; }
+    const relX = rel[0], relY = rel[1];
     const iv = [];
     let cur = null;
     for (let s = MIN_FLICK; s <= B.max; s += 0.002) {
-      const r = shoot(shape, map, relX, 560, straight(s));
+      const r = shoot(shape, map, relX, relY, straight(s));
       const p = !!(r && r.full && r.perfect);
       if (p && !cur) cur = [s, s];
       else if (p && cur) cur[1] = s;
@@ -134,30 +141,45 @@ verdict(wMax / wMin < 2.0, '세기 기준 폭 ' + wMin.toFixed(1) + '% ~ ' + wMa
 
 // ── 검사 4: 프레임 히치 — 50ms/100ms 프레임이 끼어도 같은 던지기가 퍼펙트인가 ──
 console.log('');
-console.log('=== 검사 4: 프레임 히치 (벽 직전 50ms·100ms 프레임) ===');
-let dMax = 0, miss4 = 0, n4 = 0;
+console.log('=== 검사 4: 프레임 히치 — 같은 던지기는 프레임 스케줄과 무관하게 같은 결과여야 한다 ===');
+// 60fps 기준선과, 벽 직전에 50ms/100ms 프레임을 끼운 스케줄을 비교한다. 위치·접촉 수·
+// 결과(stuck/bounce/nogrip)·퍼펙트가 하나라도 다르면 실패. 부분 접촉 던지기도 버리지
+// 않는다 — 리뷰가 잡은 재현(유리창, 릴리즈 (180,390))이 정확히 "히치로 발 두 개가
+// 창틀에 빠지는" 케이스였다. 스핀 던지기 포함.
+const RELS4 = [[240, 560], [180, 390], [300, 500], [210, 620]];
+let dMax = 0, dyMax = 0, bad4 = 0, n4 = 0;
+const combos4 = new Set();
 for (const shape of ST.Shapes.list) {
   for (const map of ST.Materials.list) {
     const B = gaugeBand(shape, map);
-    // 스핀 던지기도 포함 — 보간에서 spin 을 빼먹으면 impact.spin/angle 이 dt 에 묶인다
     for (const spin of [0, 20]) {
-      const base = shoot(shape, map, 240, 560, straight(B.sweet), null, spin);
-      if (!base || !base.full) continue;
-      for (const hitch of [0.05, 0.1]) {
-        // 정상 프레임 n 개 뒤 히치 — 벽 직전에 걸리도록 여러 위치 시도
-        for (let n = 8; n <= 24; n += 2) {
-          const dts = []; for (let i = 0; i < n; i++) dts.push(1 / 60); dts.push(hitch);
-          const r = shoot(shape, map, 240, 560, straight(B.sweet), dts, spin);
-          if (!r || !r.full) continue;
-          n4++;
-          dMax = Math.max(dMax, Math.abs(r.r - base.r));
-          if (base.perfect && !r.perfect) miss4++;
+      for (const rel of RELS4) {
+        const base = shoot(shape, map, rel[0], rel[1], straight(B.sweet), null, spin);
+        if (base.outcome === 'none') continue; // 벽에 안 닿는 릴리즈는 비교 대상이 아니다
+        for (const hitch of [0.05, 0.1]) {
+          for (let n = 8; n <= 24; n += 2) {
+            const dts = []; for (let i = 0; i < n; i++) dts.push(1 / 60); dts.push(hitch);
+            const r = shoot(shape, map, rel[0], rel[1], straight(B.sweet), dts, spin);
+            n4++; combos4.add(shape.id + '/' + map.id);
+            const dy = Math.hypot(r.x - base.x, r.y - base.y);
+            dyMax = Math.max(dyMax, dy);
+            if (r.r != null && base.r != null) dMax = Math.max(dMax, Math.abs(r.r - base.r));
+            const same = r.outcome === base.outcome && r.contacts === base.contacts
+              && r.perfect === base.perfect && dy < 1e-6;
+            if (!same) {
+              bad4++;
+              if (bad4 <= 5) console.log('  차이: ' + shape.id + '/' + map.id + ' rel(' + rel + ') spin' + spin
+                + ' hitch' + hitch + ' n' + n + ' → ' + base.outcome + '/' + base.contacts + '/' + base.perfect
+                + ' vs ' + r.outcome + '/' + r.contacts + '/' + r.perfect + ' Δpos ' + dy.toFixed(5));
+            }
+          }
         }
       }
     }
   }
 }
-verdict(miss4 === 0, '히치로 퍼펙트를 놓친 케이스 ' + miss4 + '/' + n4 + ' · 최대 |Δr| ' + dMax.toFixed(5));
+verdict(bad4 === 0 && combos4.size === ST.Shapes.list.length * ST.Materials.list.length,
+  '히치로 결과가 바뀐 케이스 ' + bad4 + '/' + n4 + ' (조합 ' + combos4.size + '/12) · 최대 Δpos ' + dyMax.toExponential(2) + ' · 최대 |Δr| ' + dMax.toExponential(2));
 
 // ── 검사 5: 저그립 절벽 여유 — sweet 닫힌 해의 판별식이 0 이 되는 grip 과의 거리 ──
 console.log('');

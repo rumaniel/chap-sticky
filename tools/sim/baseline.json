@@ -1,0 +1,76 @@
+{
+  "seed": 12345,
+  "n": 300,
+  "maps": {
+    "chalk": {
+      "stuck": 100,
+      "perfect": 25,
+      "curve": 17.7,
+      "spot": 27,
+      "perSpot": [
+        11,
+        16
+      ],
+      "hold50": 10.6,
+      "holdMax": 12.7,
+      "score": 600
+    },
+    "room": {
+      "stuck": 97.7,
+      "perfect": 22.7,
+      "curve": 17.3,
+      "spot": 28,
+      "perSpot": [
+        14,
+        14.3
+      ],
+      "hold50": 8.3,
+      "holdMax": 9.8,
+      "score": 482
+    },
+    "glass": {
+      "stuck": 70.3,
+      "perfect": 8.7,
+      "curve": 16.3,
+      "spot": 32,
+      "perSpot": [
+        21,
+        11
+      ],
+      "hold50": 4.2,
+      "holdMax": 6.3,
+      "score": 125
+    },
+    "fridge": {
+      "stuck": 92,
+      "perfect": 18,
+      "curve": 23.7,
+      "spot": 49,
+      "perSpot": [
+        9.7,
+        16.7,
+        33.7
+      ],
+      "hold50": 8.2,
+      "holdMax": 10,
+      "score": 461
+    }
+  },
+  "holds": {
+    "man": {
+      "p50": 10.6,
+      "p90": 11.7,
+      "max": 12.7
+    },
+    "octo": {
+      "p50": 13.5,
+      "p90": 14.6,
+      "max": 16.1
+    },
+    "star": {
+      "p50": 12,
+      "p90": 13.2,
+      "max": 14.3
+    }
+  }
+}

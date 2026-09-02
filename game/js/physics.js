@@ -23,6 +23,7 @@ window.ST = window.ST || {};
     VZ_MIN: 3.2, VZ_MAX: 12.5,
     KSPIN: 1.05, SPIN_MAX: 32,   // rad/s
   };
+  const H_MAX = 1 / 120; // 비행 적분 서브스텝 상한 (s)
 
   const Physics = {
     TUNE,
@@ -76,10 +77,17 @@ window.ST = window.ST || {};
     },
 
     // 비행 적분. 결과: null(비행중) | {type:'wall'|'floor'|'past', ...}
+    // 같은 던지기는 프레임 스케줄과 무관하게 같은 곳에 같은 상태로 닿아야 한다 —
+    // tools/sim/gauge.js 검사 4 가 히치 프레임을 끼워 위치·접촉·판정 동일성을 확인한다.
     stepFlight(f, dt) {
-      const N = 2; // 서브스텝
+      // 서브스텝 크기를 고정한다 (최대 1/120 s). 예전엔 N=2 고정이라 스텝이 프레임 길이에
+      // 비례했고, 100ms 히치 한 프레임이면 벽 앞까지 누적된 위치가 2cm 틀어져 유리창
+      // 창틀에서 발 두 개가 빠지고 튕겼다 (R15 리뷰). 60fps 에서는 예전과 똑같이 2스텝.
+      // dt/H_MAX 가 정수일 때 부동소수점 오차로 한 스텝 더 생기지 않게 엡실론을 뺀다
+      // (1/60 ÷ 1/120 = 2.0000000000000004 → ceil 3). 그러면 60fps 는 h=1/120 그대로.
+      const N = Math.max(2, Math.ceil(dt / H_MAX - 1e-6));
+      const h = dt / N;
       for (let i = 0; i < N; i++) {
-        const h = dt / N;
         const px = f.x, py = f.y, pz = f.z, pvx = f.vx, pvy = f.vy, pa = f.angle, pspin = f.spin;
         f.vy -= TUNE.GRAVITY * h;
         f.vx += TUNE.MAGNUS * f.spin * f.vz * h;
