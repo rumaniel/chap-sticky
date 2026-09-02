@@ -79,7 +79,8 @@ window.ST = window.ST || {};
       id: 'glass', name: '유리창', desc: '미끌미끌! 살살 던져야 붙는다', unlock: 3000,
       // grip 0.85 -> 0.90 (R15). r=SWEET 해가 판별식 절벽(grip 0.831) 바로 위라
       // sweet 이 하강 구간 깊숙이(0.97) 내려앉아 낮게 착탄 -> 창틀에 걸렸다.
-      // 0.90 이면 sweet 1.178 로 예전 값(1.107) 근처로 돌아온다. 여전히 최저 그립.
+      // 0.90 이면 sweet 1.178 로 예전 값(1.107) 근처로 돌아온다. 절벽 여유 8% —
+      // 더 내릴 거면 tools/sim/gauge.js 검사 5 를 먼저 볼 것. 냉장고와 최저 타이.
       mat: { grip: 0.90, decay: 0.085, flipPeriod: 0.85, slideStep: 1.25, slideCont: 26, bounce: 0.62 },
       skyColor: '#274a73', floorColor: ['#5a6b7d', '#3a4757'],
       // 창틀 십자 = 그립 없음 (멀티 머테리얼 존) — 시각적 창틀 폭과 일치

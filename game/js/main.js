@@ -868,44 +868,9 @@ window.ST = window.ST || {};
      * 따라도 12개 조합 중 2개(냉장고)에서만 퍼펙트가 나왔다. 분리 후 10개.
      * 검증: node tools/sim/gauge.js */
     _buildGaugeBand() {
-      const T = ST.Physics.TUNE;
-      const TANGENT_DIV = 1.21; // limit — 최악 기준. 28,297회 스윕에서 튕김 0
-      const sumGrip = this.shape.stickyPoints.reduce((s, p) => s + p.grip, 0);
-      const limit = sumGrip * this.map.mat.grip * ST.Sticky.K_MAX;
-      const toSpeed = (vz) => Math.max(0, Math.min(T.VZ_MAX, vz)) / T.KZ;
-      this.gaugeBand = {
-        max: T.VZ_MAX / T.KZ,
-        min: ST.Input.MIN_FLICK,
-        limit: toSpeed(limit / this.shape.mass / TANGENT_DIV),
-        sweet: Math.min(T.VZ_MAX / T.KZ, this._solveSweet(limit)),
-      };
-    },
-
-    /* sweet 은 상수로 나누지 않고 r(s) = SWEET 을 직접 푼다 (R15).
-     *
-     * 똑바로 던지면 벽까지의 z 거리가 d = WALL_Z − HOLD_Z 로 고정이라 닫힌 해가 있다:
-     *   vz = KZ·s,  비행시간 = d/vz,  vy = KY·s − G/s  (G = g·d/KZ)
-     *   충격량 = (vz + 0.35·|vy|)·질량,  r = 충격량 / 한계
-     * |vy| 때문에 도착이 궤적 정점이 되는 s0 = √(G/KY) 를 기준으로 식이 갈리고,
-     * 양쪽 다 s 를 곱하면 이차식이 된다.
-     *
-     * 예전에는 상수 하나(SWEET_DIV)로 나눴는데, 맵마다 sweet 이 s0 의 어느 쪽에
-     * 놓이냐가 달라 오차가 ±0.03 까지 벌어졌다. 퍼펙트 밴드를 민감도에 맞춰
-     * 좁히고 나니 그 오차가 그대로 "마커대로 던져도 퍼펙트가 안 나옴" 이 됐다. */
-    _solveSweet(limit) {
-      const T = ST.Physics.TUNE;
-      const G = T.GRAVITY * (T.WALL_Z - T.HOLD_Z) / T.KZ;
-      const s0 = Math.sqrt(G / T.KY);
-      const C = ST.Sticky.SWEET * limit / this.shape.mass;
-      // 상승 구간(vy>0): (KZ+0.35·KY)·s² − C·s − 0.35·G = 0
-      const aHi = T.KZ + 0.35 * T.KY, cHi = 0.35 * G;
-      const sHi = (C + Math.sqrt(C * C + 4 * aHi * cHi)) / (2 * aHi);
-      if (sHi >= s0) return sHi;
-      // 하강 구간(vy<0): (KZ−0.35·KY)·s² − C·s + 0.35·G = 0 — 큰 근이 "세게 = 강하게" 직관과 맞다
-      const aLo = T.KZ - 0.35 * T.KY;
-      const disc = C * C - 4 * aLo * cHi;
-      if (disc < 0) return s0; // 그 구간 최소 r 이 SWEET 보다 높다 — 정점 속도로 근사
-      return Math.min(s0, (C + Math.sqrt(disc)) / (2 * aLo));
+      // 수식은 sticky.js 에 있다 (R15). 시뮬 하네스도 같은 함수를 쓴다 — 여기에 복사본을
+      // 두지 않는다. limit 은 최악 기준 안전 하한, sweet 은 r(s)=SWEET 의 닫힌 해.
+      this.gaugeBand = ST.Sticky.gaugeBand(this.shape, this.map, ST.Input.MIN_FLICK);
     },
 
     // 스핀 제스처 진행 중 판정 (스핀 호 표시 임계와 동일 + 최근 회전 입력)

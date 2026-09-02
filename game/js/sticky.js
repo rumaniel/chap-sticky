@@ -18,34 +18,91 @@ window.ST = window.ST || {};
   const TOY_R = 0.17;
   const SWEET = 0.62;
   const SWEET_HARD = 0.55; // 과속 쪽 품질 하락 완만화 (기존 1-SWEET=0.38)
-  /* 퍼펙트 판정 폭 |r - SWEET|. 예전 기준 q>0.9 는 r 0.42~0.79 로 부착 범위의 37% 라
-   * 평균 플레이어의 78% 가 퍼펙트를 받았다 (R10).
+  /* ── 충격량·게이지·퍼펙트 수식 ─────────────────────────────────────────
+   * 게임(main.js)과 시뮬 하네스(tools/sim)가 여기 함수를 그대로 쓴다. 복사본을 두지
+   * 않는다 — 복사본은 반드시 원본과 어긋난다 (R15 적대적 리뷰가 실제로 잡아냈다).
    *
-   * 폭을 고정하면 안 된다 (R15). r 은 충격비라, 플레이어가 실제로 조절하는 "던지기
-   * 세기" 로 환산했을 때의 폭이 던지기마다 달라진다. 원인은 접선 항(0.35·tangent)이
-   * 속도에 대해 부호를 뒤집는 것이다 —
+   * 충격량 = (vz + TANGENT_K·tangent)·질량,   r = 충격량 / (접착 × K_MAX)
    *
-   *   도착 시점에 아직 올라가는 중(vy>0)이면 세기를 올릴 때 |vy| 도 같이 커져
-   *   r 이 민감해진다. 이미 내려오는 중(vy<0)이면 |vy| 가 줄어 vz 증가를 상쇄해
-   *   둔감해진다. 분기는 도착이 궤적 정점이 되는 s ≈ 1.30 px/ms.
-   *
-   * 고정 폭이던 시절 실측: 세기 기준 폭이 칠판 8.1% / 거실 7.7% / 냉장고 28.0% 로
-   * 갈렸고 퍼펙트율이 22% vs 62% 가 됐다. 냉장고 sweet(1.17)이 분기점 아래라
-   * 퍼펙트 구간이 3배 넓었던 것이다 — 맵 개성이 아니라 좌표계 문제다.
-   *
-   * 그래서 밴드를 민감도에 비례시켜 세기 기준 폭을 일정하게 만든다:
-   *   s = vz/KZ,  d(tangent)/ds = sign(vy)·(2·KY − vy/s),  민감도 = KZ + 0.35·d(tangent)/ds
-   * 비스듬한 던지기는 tangent 가 |vy| 가 아니라 hypot(vx,vy) 라 식이 어긋나므로
-   * 배율에 상·하한을 둔다. 검증: node tools/sim/gauge.js */
-  const PERFECT_BASE = 0.0245;
-  const PERFECT_SENS_MIN = 0.35;
-  const PERFECT_SENS_MAX = 1.80;
+   * 똑바로 던지면(vx=0) 벽까지의 z 거리 d = WALL_Z − HOLD_Z 가 고정이라 r(s) 에 닫힌 식이 있다:
+   *   vz = KZ·s,  비행시간 = d/vz,  vy = KY·s − G/s   (G = g·d/KZ)
+   *   r(s) = (KZ·s + TANGENT_K·|KY·s − G/s|)·질량 / 한계
+   * |vy| 때문에 도착이 궤적 정점이 되는 s0 = √(G/KY) ≈ 1.29 px/ms 에서 식이 갈린다.
+   * 그 아래로 던지면 벽에 닿을 때 이미 하강 중이라, 세게 던질수록 |vy| 가 줄어 vz 증가를
+   * 상쇄한다 — r 이 세기에 둔감해진다. 위면 반대로 민감해진다 (R15). */
+  const TANGENT_K = 0.35;   // 접선 성분이 충격량에 기여하는 비율
+  const TANGENT_DIV = 1.21; // 게이지 limit — 최악(비스듬한 던지기) 기준 안전 하한. 스윕으로 정함
 
-  function perfectBand(impact) {
+  function impulseOf(impact, shape) {
+    return (impact.vz + TANGENT_K * Math.hypot(impact.vx, impact.vy)) * shape.mass;
+  }
+
+  function flightConsts() {
     const T = ST.Physics.TUNE;
-    const s = Math.max(0.1, impact.vz / T.KZ);
-    const dTan = Math.sign(impact.vy) * (2 * T.KY - impact.vy / s);
-    const scale = (T.KZ + 0.35 * dTan) / T.KZ;
+    const G = T.GRAVITY * (T.WALL_Z - T.HOLD_Z) / T.KZ;
+    return { T, G, s0: Math.sqrt(G / T.KY) };
+  }
+
+  /* 똑바로 던졌을 때 단위질량 충격량 (연속 모델). */
+  function straightImpulse(s) {
+    const c = flightConsts();
+    return c.T.KZ * s + TANGENT_K * Math.abs(c.T.KY * s - c.G / s);
+  }
+
+  /* 전패드 접촉 시 접착 한계. */
+  function adhesionLimit(shape, map) {
+    const sumGrip = shape.stickyPoints.reduce((a, p) => a + p.grip, 0);
+    return sumGrip * map.mat.grip * K_MAX;
+  }
+
+  /* r(s) = SWEET 인 던지기 세기. 상승 구간(s ≥ s0)은 양근 하나, 하강 구간은 두 근 중
+   * 큰 것 ("세게 = 강하게" 직관과 맞는 쪽). 근이 없으면(저그립 벽) 하강식의 최소점을
+   * 준다 — SWEET 에 가장 가까운 r 이고, exact=false 로 알린다. */
+  function solveSweet(shape, limit) {
+    const { T, G, s0 } = flightConsts();
+    const C = SWEET * limit / shape.mass;
+    const aHi = T.KZ + TANGENT_K * T.KY, c = TANGENT_K * G;
+    const sHi = (C + Math.sqrt(C * C + 4 * aHi * c)) / (2 * aHi);
+    if (sHi >= s0) return { s: sHi, exact: true, branch: 'ascending' };
+    const aLo = T.KZ - TANGENT_K * T.KY;
+    const disc = C * C - 4 * aLo * c;
+    if (disc < 0) return { s: Math.sqrt(c / aLo), exact: false, branch: 'no-root' };
+    return { s: Math.min(s0, (C + Math.sqrt(disc)) / (2 * aLo)), exact: true, branch: 'descending' };
+  }
+
+  /* 게이지 밴드 (플릭 속도 px/ms). min ≤ sweet ≤ limit ≤ max 를 보장한다 — 저그립
+   * 벽을 추가해도 sweet 마커가 빨간 존에 그려지거나 초록 존이 뒤집히지 않는다. */
+  function gaugeBand(shape, map, minFlick) {
+    const T = ST.Physics.TUNE;
+    const lim = adhesionLimit(shape, map);
+    const max = T.VZ_MAX / T.KZ;
+    const limit = Math.max(minFlick, Math.min(max, lim / shape.mass / TANGENT_DIV / T.KZ));
+    const sw = solveSweet(shape, lim);
+    const sweet = Math.max(minFlick, Math.min(limit, sw.s));
+    return { min: minFlick, sweet, limit, max, exact: sw.exact && sweet === sw.s, branch: sw.branch };
+  }
+
+  /* 퍼펙트 판정 폭 |r − SWEET|.
+   * 예전 기준 q>0.9 는 r 0.42~0.79 로 부착 범위의 37% 라 평균 플레이어의 78% 가
+   * 퍼펙트를 받았다 (R10). 고정 폭 0.035 로 좁혔더니, 이번엔 세기 기준 폭이 맵마다
+   * 달라졌다 — 칠판 8% / 냉장고 28% (r(s) 의 기울기가 s0 위·아래에서 3배 차이) —
+   * 퍼펙트율이 22% vs 62% 로 갈렸다 (R15).
+   *
+   * 그래서 폭을 조합(모형×맵)마다 sweet 지점의 민감도에 비례시킨다. 던지기마다 재지
+   * 않는다 — 첫 구현이 그랬는데, 정점(vy=0)에서 부호가 뒤집혀 퍼펙트 구간이 네 개의
+   * 섬으로 쪼개졌다(세게 던지면 퍼펙트→아님→다시 퍼펙트). 조합당 한 값이면 구간이
+   * 하나다. 민감도는 sweet ±PERFECT_HALF 의 할선 기울기라 정점에 걸쳐도 매끄럽다.
+   * 검증: node tools/sim/gauge.js */
+  const PERFECT_BASE = 0.0245;  // 기준 기울기(접선 항 없음)에서의 밴드
+  const PERFECT_HALF = 0.04;    // 할선 반폭 (sweet 대비) ≈ 의도한 세기 창
+  const PERFECT_SENS_MIN = 0.35, PERFECT_SENS_MAX = 1.80;
+
+  function perfectBand(shape, map) {
+    const { T } = flightConsts();
+    const lim = adhesionLimit(shape, map);
+    const s = solveSweet(shape, lim).s;
+    const a = s * (1 - PERFECT_HALF), b = s * (1 + PERFECT_HALF);
+    const scale = (straightImpulse(b) - straightImpulse(a)) / (T.KZ * (b - a));
     return PERFECT_BASE * Math.max(PERFECT_SENS_MIN, Math.min(PERFECT_SENS_MAX, scale));
   }
   const SWING_MAX = 1.05;
@@ -99,6 +156,8 @@ window.ST = window.ST || {};
 
   const Sticky = {
     TOY_R, V2, pointWorld, K_MAX, SWEET,
+    TANGENT_K, TANGENT_DIV, PERFECT_BASE,
+    impulseOf, straightImpulse, adhesionLimit, solveSweet, gaugeBand, perfectBand,
 
     /* ---------------- 충돌 해석 (포인트 단위 머테리얼) ---------------- */
     resolveImpact(impact, shape, map) {
@@ -162,8 +221,7 @@ window.ST = window.ST || {};
         return { stuck: false, reason: 'nogrip', contacts: geo, speed };
       }
 
-      const tangent = Math.hypot(impact.vx, impact.vy);
-      const impulse = (impact.vz + 0.35 * tangent) * shape.mass;
+      const impulse = impulseOf(impact, shape);
       const limit = adhesion * K_MAX;
 
       if (impulse > limit) {
@@ -177,7 +235,7 @@ window.ST = window.ST || {};
 
       return {
         stuck: true, contacts, adhesion, impulse, speed, geoF,
-        quality: q, gh, perfect: Math.abs(r - SWEET) < perfectBand(impact), mat: centerMat || map.mat,
+        quality: q, gh, perfect: Math.abs(r - SWEET) < perfectBand(shape, map), mat: centerMat || map.mat,
       };
     },
 

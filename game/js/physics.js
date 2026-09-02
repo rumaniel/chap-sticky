@@ -80,6 +80,7 @@ window.ST = window.ST || {};
       const N = 2; // 서브스텝
       for (let i = 0; i < N; i++) {
         const h = dt / N;
+        const px = f.x, py = f.y, pz = f.z, pvx = f.vx, pvy = f.vy, pa = f.angle;
         f.vy -= TUNE.GRAVITY * h;
         f.vx += TUNE.MAGNUS * f.spin * f.vz * h;
         f.spin *= 1 - TUNE.SPIN_DECAY * h;
@@ -89,6 +90,17 @@ window.ST = window.ST || {};
         f.angle += f.spin * h;
 
         if (f.z >= TUNE.WALL_Z) {
+          // 벽면(z = WALL_Z)까지 서브스텝 안에서 선형 보간한다. 전에는 서브스텝 끝 상태를
+          // 그대로 충돌 상태로 썼는데, 그러면 착탄 위치·속도가 프레임 길이에 따라 흔들린다 —
+          // 100ms 히치 한 번이면 같은 던지기의 착탄 y 가 0.1m 까지 달라지고, 충격비 r 이
+          // 서브스텝 경계마다 톱니처럼 뛰었다 (R15 적대적 리뷰). 보간하면 결정론적이다.
+          const u = f.z > pz ? (TUNE.WALL_Z - pz) / (f.z - pz) : 1;
+          f.x = px + (f.x - px) * u;
+          f.y = py + (f.y - py) * u;
+          f.vx = pvx + (f.vx - pvx) * u;
+          f.vy = pvy + (f.vy - pvy) * u;
+          f.angle = pa + (f.angle - pa) * u;
+          f.z = TUNE.WALL_Z;
           const inWall =
             f.x > -TUNE.WALL_W / 2 && f.x < TUNE.WALL_W / 2 &&
             f.y > TUNE.WALL_BOTTOM && f.y < TUNE.WALL_BOTTOM + TUNE.WALL_H;

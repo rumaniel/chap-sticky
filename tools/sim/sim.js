@@ -7,8 +7,9 @@
  * 브라우저에서는 window 가 전역 객체라 `window.ST = ...` 가 전역 `ST` 를 만든다.
  * vm 컨텍스트에서도 컨텍스트 객체 자신을 window 로 묶어 같은 관계를 재현한다.
  *
- * 게이지 상수(TANGENT_DIV)는 main.js 에서 정규식으로 뽑아 쓴다. 여기에
- * 숫자를 적어두면 코드를 고칠 때 조용히 어긋난다.
+ * 게이지·퍼펙트 수식은 sticky.js 의 함수(ST.Sticky.gaugeBand 등)를 그대로 쓴다. 여기에
+ * 복사본이나 숫자를 적어두면 코드를 고칠 때 조용히 어긋난다. MIN_FLICK 만 input.js 에서
+ * 정규식으로 뽑는다 (input.js 는 DOM 의존이라 로드하지 않는다).
  *
  * 난수는 시드 고정이다. 같은 시드 = 같은 숫자. 문서에 수치를 쓸 때는 시드도 같이 적는다.
  *
@@ -62,46 +63,15 @@ ST.I18N = { t: (k) => k };
 ST.FX = { addShake: () => {}, addHitstop: () => {}, burst: () => {} };
 const T = ST.Physics.TUNE;
 
-// ---- 게이지 상수를 main.js 에서 직접 뽑는다 ----
-function constFromMain(name, fallback) {
-  const src = read('main.js');
-  const m = src.match(new RegExp('const\\s+' + name + '\\s*=\\s*([0-9.]+)'));
-  if (!m) {
-    if (fallback != null) return fallback;
-    throw new Error('main.js 에서 ' + name + ' 을 못 찾았다 — 이름이 바뀌었으면 여기도 고쳐라');
-  }
+// MIN_FLICK 은 input.js 에서 정규식으로 뽑는다 (input.js 는 DOM 의존이라 로드하지 않는다).
+const MIN_FLICK = (() => {
+  const m = read('input.js').match(/const\s+MIN_FLICK\s*=\s*([0-9.]+)/);
+  if (!m) throw new Error('input.js 에서 MIN_FLICK 을 못 찾았다');
   return Number(m[1]);
-}
-const MIN_FLICK = 0.38; // ST.Input.MIN_FLICK (input.js 는 DOM 의존이라 로드하지 않는다)
-const TANGENT_DIV = Number(process.env.TANGENT_DIV || constFromMain('TANGENT_DIV'));
-
-/* main.js _buildGaugeBand / _solveSweet 와 같은 식이어야 한다.
- * limit 은 최악(비스듬한 던지기) 기준 안전 하한이라 상수로 나누고,
- * sweet 은 똑바로 던졌을 때 r(s)=SWEET 이 되는 s 를 닫힌 해로 푼다. */
-function solveSweet(shape, lim) {
-  const G = T.GRAVITY * (T.WALL_Z - T.HOLD_Z) / T.KZ;
-  const s0 = Math.sqrt(G / T.KY);
-  const C = ST.Sticky.SWEET * lim / shape.mass;
-  const aHi = T.KZ + 0.35 * T.KY, cHi = 0.35 * G;
-  const sHi = (C + Math.sqrt(C * C + 4 * aHi * cHi)) / (2 * aHi);
-  if (sHi >= s0) return sHi;
-  const aLo = T.KZ - 0.35 * T.KY;
-  const disc = C * C - 4 * aLo * cHi;
-  if (disc < 0) return s0;
-  return Math.min(s0, (C + Math.sqrt(disc)) / (2 * aLo));
-}
-
-function gaugeBand(shape, map, tanDiv) {
-  const sumGrip = shape.stickyPoints.reduce((s, p) => s + p.grip, 0);
-  const lim = sumGrip * map.mat.grip * ST.Sticky.K_MAX;
-  const toSpeed = (vz) => Math.max(0, Math.min(T.VZ_MAX, vz)) / T.KZ;
-  return {
-    max: T.VZ_MAX / T.KZ,
-    min: MIN_FLICK,
-    limit: toSpeed(lim / shape.mass / (tanDiv || TANGENT_DIV)),
-    sweet: Math.min(T.VZ_MAX / T.KZ, solveSweet(shape, lim)),
-  };
-}
+})();
+// 게이지·퍼펙트 수식은 게임(sticky.js)의 함수를 그대로 쓴다 — 복사본 없음.
+const gaugeBand = (shape, map) => ST.Sticky.gaugeBand(shape, map, MIN_FLICK);
+const TANGENT_DIV = ST.Sticky.TANGENT_DIV;
 
 /* ---- 플레이어 모델 ----
  *
@@ -110,9 +80,9 @@ function gaugeBand(shape, map, tanDiv) {
  * spread 는 sweet 대비 상대 오차 (1.0 = 마커 정확히).
  *
  * 주의: 2026-09-01 까지 쓰던 (미커밋) 하네스는 세기를 절대값 1.05 px/ms 로 고정했다.
- * 맵별 sweet 은 칠판 1.50 / 거실 1.15 / 유리창 0.98 / 냉장고 1.04 라 냉장고만 우연히
- * 일치했고, 그래서 "냉장고만 퍼펙트율 37%" 라는 잘못된 결론이 나왔다. 게임 밸런스가
- * 아니라 모델 아티팩트였다. 그 하네스로 낸 수치는 전부 폐기했다.
+ * 당시 게이지 상수(1.20) 기준 맵별 sweet 은 칠판 1.50 / 거실 1.15 / 유리창 0.98 /
+ * 냉장고 1.04 라 냉장고만 우연히 일치했고, 그래서 "냉장고만 퍼펙트율 37%" 라는 잘못된
+ * 결론이 나왔다. 게임 밸런스가 아니라 모델 아티팩트였다. 그 하네스로 낸 수치는 전부 폐기했다.
  */
 const SKILLS = {
   novice: { relY: [610, 55], spread: 0.24, aim: 13, spin: 0.10 },
@@ -192,13 +162,13 @@ function measure(shape, map, skill, n, seed) {
 
 module.exports = {
   ST, T, gaugeBand, measure, playThrow, srand, rnd, gauss,
-  MIN_FLICK, SKILLS, TANGENT_DIV, solveSweet,
+  MIN_FLICK, SKILLS, TANGENT_DIV,
 };
 
 if (require.main === module) {
   const N = Number(process.argv[2] || 300);
   const SEED = Number(process.argv[3] || 12345);
-  console.log('TANGENT_DIV=' + TANGENT_DIV + ' (main.js 에서 읽음) · sweet 은 닫힌 해 (R15)');
+  console.log('TANGENT_K=' + ST.Sticky.TANGENT_K + ' TANGENT_DIV=' + TANGENT_DIV + ' PERFECT_BASE=' + ST.Sticky.PERFECT_BASE + ' (sticky.js)');
   console.log('시드 ' + SEED + ' · ' + N + '회/맵 · 찐득맨 · 평균 플레이어');
   console.log('');
   console.log('맵      부착률  퍼펙트  커브   스팟률  개별 스팟            버티기p50  최대   점수/던지기');
