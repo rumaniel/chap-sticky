@@ -21,7 +21,8 @@ function shoot(shape, map, relX, relY, flick, dts, spin) {
   for (let i = 0; i < 900; i++) {
     const hit = ST.Physics.stepFlight(f, dts ? dts[i % dts.length] : 1 / 60);
     if (!hit) continue;
-    if (hit.type !== 'wall') return null;
+    // 벽 외(past/floor)도 같은 모양의 객체로 — 호출부가 .full/.outcome 을 바로 읽는다 (Copilot 지적)
+    if (hit.type !== 'wall') return { outcome: hit.type, contacts: 0, full: false, perfect: false, r: null, x: NaN, y: NaN };
     const res = ST.Sticky.resolveImpact(hit, shape, map);
     return {
       r: res.adhesion ? ST.Sticky.impulseOf(hit, shape) / (res.adhesion * ST.Sticky.K_MAX) : null,
