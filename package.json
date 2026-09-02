@@ -1,6 +1,6 @@
 {
   "name": "chap-sticky",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "찹! 찐득이 — 벽에 던져 붙이고 버티는 물리 미니게임 (순수 JS + Canvas)",
   "license": "UNLICENSED",
