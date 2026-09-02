@@ -857,15 +857,20 @@ window.ST = window.ST || {};
      *
      * 접선 성분(impulse 의 0.35·tangent 항)은 던지기가 빠를수록 같이 커진다. 예전처럼
      * 상수 0.4 를 빼면 관대한 벽일수록 오차가 벌어져 초록 존이 실제보다 넓게 보였다 —
-     * 칠판은 표시 2.805 인데 실제 부착 한계가 2.42 였다(R11). 비례식으로 바꾸고 약간
-     * 보수적으로 잡아, 게이지가 "붙는다"고 한 구간은 실제로 붙게 한다. */
+     * 칠판은 표시 2.805 인데 실제 부착 한계가 2.42 였다(R11). 비례식으로 바꿨다.
+     *
+     * limit 과 sweet 은 성격이 달라 나누는 값이 다르다 (R14):
+     *   limit 은 "여기까지는 붙는다"는 안전 하한이라 **최악**(비스듬한 던지기, 접선이
+     *          가장 큰 경우)을 기준으로 잡아야 한다.
+     *   sweet 은 "여기가 최적"이라는 목표점이라 **전형**(똑바로 던지기)을 기준으로
+     *          잡아야 마커대로 던졌을 때 퍼펙트가 나온다.
+     * 둘 다 최악 기준으로 나눴더니 sweet 이 퍼펙트 밴드 아래로 밀려서, 마커를 정확히
+     * 따라도 12개 조합 중 2개(냉장고)에서만 퍼펙트가 나왔다. 분리 후 10개.
+     * 검증: node tools/sim/gauge.js */
     _buildGaugeBand() {
       const T = ST.Physics.TUNE;
-      // 실측 보정. 맵 4종 모두에서 표시 limit <= 실제 부착 한계가 되도록 잡았다.
-      // sweet 도 같은 값으로 나눠 약 5~10%% 낮게 표시된다 — 의도적이다. 게이지는
-      // "이 세기면 붙는다"는 약속이라 어기지 않는 쪽이 우선이고, 점수 최적점은
-      // 플레이어가 위쪽으로 밀어붙이며 찾는 게 리스크-리워드로 자연스럽다.
-      const TANGENT_DIV = 1.20;
+      const TANGENT_DIV = 1.21; // limit — 최악 기준. 28,297회 스윕에서 튕김 0
+      const SWEET_DIV = 1.06;   // sweet — 전형 기준. 마커 적중 시 퍼펙트 10/12 조합
       const sumGrip = this.shape.stickyPoints.reduce((s, p) => s + p.grip, 0);
       const limit = sumGrip * this.map.mat.grip * ST.Sticky.K_MAX;
       const toSpeed = (vz) => Math.max(0, Math.min(T.VZ_MAX, vz)) / T.KZ;
@@ -873,7 +878,7 @@ window.ST = window.ST || {};
         max: T.VZ_MAX / T.KZ,
         min: ST.Input.MIN_FLICK,
         limit: toSpeed(limit / this.shape.mass / TANGENT_DIV),
-        sweet: toSpeed(ST.Sticky.SWEET * limit / this.shape.mass / TANGENT_DIV),
+        sweet: toSpeed(ST.Sticky.SWEET * limit / this.shape.mass / SWEET_DIV),
       };
     },
 
