@@ -53,6 +53,11 @@ git tag v1.0.1 && git push origin v1.0.1
 itch 와 Play 가 같은 태그에서 나가므로 "이 버전에 뭐가 올라갔나" 가 한 줄로 답이 된다.
 상위 트랙 승격(internal → alpha → production)은 언제나 Play Console 에서 사람이 한다.
 
+> **주의** — 커밋 메시지에 `[skip ci]` · `[ci skip]` · `[no ci]` 같은 스킵 문자열이 있으면
+> (**본문 포함**, 언급만 해도) GitHub 은 그 커밋이 head 인 push · pull_request 런을 아예
+> 만들지 않는다. **그 커밋을 가리키는 태그 푸시도 마찬가지**다. 1.0.1 이 이걸로 한 번 막혔다 —
+> "이제 스킵 문자열이 필요 없다" 고 설명한 커밋 본문이 그 문자열을 담고 있었다.
+
 태그 없이 올려야 하면 두 워크플로 다 `workflow_dispatch` 로 수동 실행할 수 있다
 (itch 는 `+dev.<run>.<sha>` 로 표시되고, Play 는 트랙을 고를 수 있다).
 
