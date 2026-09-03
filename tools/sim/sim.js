@@ -7,8 +7,9 @@
  * 브라우저에서는 window 가 전역 객체라 `window.ST = ...` 가 전역 `ST` 를 만든다.
  * vm 컨텍스트에서도 컨텍스트 객체 자신을 window 로 묶어 같은 관계를 재현한다.
  *
- * 게이지 상수(TANGENT_DIV/SWEET_DIV)는 main.js 에서 정규식으로 뽑아 쓴다. 여기에
- * 숫자를 적어두면 코드를 고칠 때 조용히 어긋난다.
+ * 게이지·퍼펙트 수식은 sticky.js 의 함수(ST.Sticky.gaugeBand 등)를 그대로 쓴다. 여기에
+ * 복사본이나 숫자를 적어두면 코드를 고칠 때 조용히 어긋난다. MIN_FLICK 만 input.js 에서
+ * 정규식으로 뽑는다 (input.js 는 DOM 의존이라 로드하지 않는다).
  *
  * 난수는 시드 고정이다. 같은 시드 = 같은 숫자. 문서에 수치를 쓸 때는 시드도 같이 적는다.
  *
@@ -62,32 +63,15 @@ ST.I18N = { t: (k) => k };
 ST.FX = { addShake: () => {}, addHitstop: () => {}, burst: () => {} };
 const T = ST.Physics.TUNE;
 
-// ---- 게이지 상수를 main.js 에서 직접 뽑는다 ----
-function constFromMain(name, fallback) {
-  const src = read('main.js');
-  const m = src.match(new RegExp('const\\s+' + name + '\\s*=\\s*([0-9.]+)'));
-  if (!m) {
-    if (fallback != null) return fallback;
-    throw new Error('main.js 에서 ' + name + ' 을 못 찾았다 — 이름이 바뀌었으면 여기도 고쳐라');
-  }
+// MIN_FLICK 은 input.js 에서 정규식으로 뽑는다 (input.js 는 DOM 의존이라 로드하지 않는다).
+const MIN_FLICK = (() => {
+  const m = read('input.js').match(/const\s+MIN_FLICK\s*=\s*([0-9.]+)/);
+  if (!m) throw new Error('input.js 에서 MIN_FLICK 을 못 찾았다');
   return Number(m[1]);
-}
-const MIN_FLICK = 0.38; // ST.Input.MIN_FLICK (input.js 는 DOM 의존이라 로드하지 않는다)
-const TANGENT_DIV = Number(process.env.TANGENT_DIV || constFromMain('TANGENT_DIV'));
-const SWEET_DIV = Number(process.env.SWEET_DIV || constFromMain('SWEET_DIV', TANGENT_DIV));
-
-/* main.js _buildGaugeBand 와 같은 식. 저기를 고치면 여기도 고쳐야 한다. */
-function gaugeBand(shape, map, tanDiv, sweetDiv) {
-  const sumGrip = shape.stickyPoints.reduce((s, p) => s + p.grip, 0);
-  const lim = sumGrip * map.mat.grip * ST.Sticky.K_MAX;
-  const toSpeed = (vz) => Math.max(0, Math.min(T.VZ_MAX, vz)) / T.KZ;
-  return {
-    max: T.VZ_MAX / T.KZ,
-    min: MIN_FLICK,
-    limit: toSpeed(lim / shape.mass / (tanDiv || TANGENT_DIV)),
-    sweet: toSpeed(ST.Sticky.SWEET * lim / shape.mass / (sweetDiv || SWEET_DIV)),
-  };
-}
+})();
+// 게이지·퍼펙트 수식은 게임(sticky.js)의 함수를 그대로 쓴다 — 복사본 없음.
+const gaugeBand = (shape, map) => ST.Sticky.gaugeBand(shape, map, MIN_FLICK);
+const TANGENT_DIV = ST.Sticky.TANGENT_DIV;
 
 /* ---- 플레이어 모델 ----
  *
@@ -96,9 +80,9 @@ function gaugeBand(shape, map, tanDiv, sweetDiv) {
  * spread 는 sweet 대비 상대 오차 (1.0 = 마커 정확히).
  *
  * 주의: 2026-09-01 까지 쓰던 (미커밋) 하네스는 세기를 절대값 1.05 px/ms 로 고정했다.
- * 맵별 sweet 은 칠판 1.50 / 거실 1.15 / 유리창 0.98 / 냉장고 1.04 라 냉장고만 우연히
- * 일치했고, 그래서 "냉장고만 퍼펙트율 37%" 라는 잘못된 결론이 나왔다. 게임 밸런스가
- * 아니라 모델 아티팩트였다. 그 하네스로 낸 수치는 전부 폐기했다.
+ * 당시 게이지 상수(1.20) 기준 맵별 sweet 은 칠판 1.50 / 거실 1.15 / 유리창 0.98 /
+ * 냉장고 1.04 라 냉장고만 우연히 일치했고, 그래서 "냉장고만 퍼펙트율 37%" 라는 잘못된
+ * 결론이 나왔다. 게임 밸런스가 아니라 모델 아티팩트였다. 그 하네스로 낸 수치는 전부 폐기했다.
  */
 const SKILLS = {
   novice: { relY: [610, 55], spread: 0.24, aim: 13, spin: 0.10 },
@@ -178,18 +162,28 @@ function measure(shape, map, skill, n, seed) {
 
 module.exports = {
   ST, T, gaugeBand, measure, playThrow, srand, rnd, gauss,
-  MIN_FLICK, SKILLS, TANGENT_DIV, SWEET_DIV,
+  MIN_FLICK, SKILLS, TANGENT_DIV,
 };
 
 if (require.main === module) {
-  const N = Number(process.argv[2] || 300);
-  const SEED = Number(process.argv[3] || 12345);
-  console.log('TANGENT_DIV=' + TANGENT_DIV + '  SWEET_DIV=' + SWEET_DIV + '  (main.js 에서 읽음)');
+  // 플래그(--update/--check)는 위치 인자에서 뺀다 — 안 빼면 Number('--update') = NaN 이
+  // 시드로 들어가 srand(NaN)=0 으로 돌고, 수치가 조용히 달라진다 (실제로 한 번 당했다).
+  const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+  const N = Number(args[0] || 300);
+  const SEED = Number(args[1] || 12345);
+  if (!Number.isFinite(N) || !Number.isFinite(SEED)) throw new Error('usage: sim.js [n] [seed] [--update|--check]');
+  // --update: 결과를 tools/sim/baseline.json 에 저장 / --check: 저장본과 비교, 다르면 exit 1.
+  // 문서의 수치는 이 baseline 에서 나온다 — 물리를 바꾸면 --check 가 먼저 깨지고,
+  // --update 로 갱신한 뒤 문서를 고친다. 문서가 조용히 낡는 걸 막는 장치 (R15 리뷰 지적).
+  const MODE = process.argv.includes('--update') ? 'update' : process.argv.includes('--check') ? 'check' : null;
+  const rows = {}, holds = {};
+  console.log('TANGENT_K=' + ST.Sticky.TANGENT_K + ' TANGENT_DIV=' + TANGENT_DIV + ' PERFECT_BASE=' + ST.Sticky.PERFECT_BASE + ' (sticky.js)');
   console.log('시드 ' + SEED + ' · ' + N + '회/맵 · 찐득맨 · 평균 플레이어');
   console.log('');
   console.log('맵      부착률  퍼펙트  커브   스팟률  개별 스팟            버티기p50  최대   점수/던지기');
   for (const map of ST.Materials.list) {
     const r = measure(ST.Shapes.get('man'), map, 'avg', N, SEED);
+    rows[map.id] = r;
     console.log(
       map.id.padEnd(7),
       (r.stuckPct.toFixed(1) + '%').padStart(6),
@@ -207,11 +201,62 @@ if (require.main === module) {
   console.log('모형    p50     p90     최대');
   for (const shape of ST.Shapes.list) {
     const r = measure(shape, ST.Materials.get('chalk'), 'avg', N, SEED);
+    holds[shape.id] = r;
     console.log(
       shape.id.padEnd(7),
       (r.hold50.toFixed(1) + 's').padStart(6),
       (r.hold90.toFixed(1) + 's').padStart(7),
       (r.holdMax.toFixed(1) + 's').padStart(7),
     );
+  }
+
+  if (MODE) {
+    const f1 = (v) => Number(v.toFixed(1));
+    const snap = { seed: SEED, n: N, maps: {}, holds: {} };
+    for (const id of Object.keys(rows)) {
+      const r = rows[id];
+      snap.maps[id] = {
+        stuck: f1(r.stuckPct), perfect: f1(r.perfectPct), curve: f1(r.curvePct), spot: f1(r.spotPct),
+        perSpot: r.perSpot.map(f1), hold50: f1(r.hold50), holdMax: f1(r.holdMax), score: Math.round(r.scorePer),
+      };
+    }
+    for (const id of Object.keys(holds)) {
+      const r = holds[id];
+      snap.holds[id] = { p50: f1(r.hold50), p90: f1(r.hold90), max: f1(r.holdMax) };
+    }
+    const file = path.join(__dirname, 'baseline.json');
+    if (MODE === 'update') {
+      fs.writeFileSync(file, JSON.stringify(snap, null, 2) + '\n');
+      console.log('');
+      console.log('baseline.json 갱신. 문서 수치를 이 값으로 맞출 것.');
+    } else {
+      const base = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const diffs = [];
+      // 양방향 비교 — 한쪽 키만 돌면 빈/부분 baseline 이 통과한다 (리뷰가 재현한 false-pass).
+      // 스키마도 본다: 레지스트리의 맵·모형이 전부 있어야 한다.
+      const walk = (a, b, p) => {
+        const isObj = (v) => v && typeof v === 'object';
+        if (isObj(a) || isObj(b)) {
+          if (!isObj(a) || !isObj(b)) { diffs.push(p + ': 구조 불일치'); return; }
+          const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+          for (const k of keys) {
+            if (!(k in a)) diffs.push(p + '.' + k + ': baseline 에 없음');
+            else if (!(k in b)) diffs.push(p + '.' + k + ': 현재 결과에 없음');
+            else walk(a[k], b[k], p + '.' + k);
+          }
+        } else if (a !== b) diffs.push(p + ': baseline ' + a + ' / now ' + b);
+      };
+      walk(base, snap, '');
+      for (const m of ST.Materials.list) if (!base.maps || !base.maps[m.id]) diffs.push('maps.' + m.id + ': baseline 에 없음');
+      for (const s of ST.Shapes.list) if (!base.holds || !base.holds[s.id]) diffs.push('holds.' + s.id + ': baseline 에 없음');
+      console.log('');
+      if (diffs.length) {
+        console.log('baseline.json 과 다르다 (' + diffs.length + '곳). 의도한 변경이면 --update 후 문서를 고칠 것:');
+        diffs.slice(0, 20).forEach((d) => console.log('  ' + d));
+        process.exitCode = 1;
+      } else {
+        console.log('baseline.json 과 일치.');
+      }
+    }
   }
 }

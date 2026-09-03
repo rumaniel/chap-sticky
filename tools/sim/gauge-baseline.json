@@ -1,0 +1,122 @@
+{
+  "man/chalk": {
+    "sweet": 1.631,
+    "limit": 2.3929,
+    "width": 8.6,
+    "intervals": 1,
+    "rel": [
+      240,
+      560
+    ]
+  },
+  "man/room": {
+    "sweet": 1.3503,
+    "limit": 1.8407,
+    "width": 7.9,
+    "intervals": 1,
+    "rel": [
+      240,
+      560
+    ]
+  },
+  "man/glass": {
+    "sweet": 1.1777,
+    "limit": 1.6566,
+    "width": 8.2,
+    "intervals": 1,
+    "rel": [
+      240,
+      560
+    ]
+  },
+  "man/fridge": {
+    "sweet": 1.1777,
+    "limit": 1.6566,
+    "width": 8.2,
+    "intervals": 1,
+    "rel": [
+      240,
+      560
+    ]
+  },
+  "octo/chalk": {
+    "sweet": 1.631,
+    "limit": 2.3929,
+    "width": 8.6,
+    "intervals": 1,
+    "rel": [
+      240,
+      560
+    ]
+  },
+  "octo/room": {
+    "sweet": 1.3503,
+    "limit": 1.8407,
+    "width": 7.9,
+    "intervals": 1,
+    "rel": [
+      240,
+      560
+    ]
+  },
+  "octo/glass": {
+    "sweet": 1.1777,
+    "limit": 1.6566,
+    "width": 8.2,
+    "intervals": 1,
+    "rel": [
+      300,
+      560
+    ]
+  },
+  "octo/fridge": {
+    "sweet": 1.1777,
+    "limit": 1.6566,
+    "width": 8.2,
+    "intervals": 1,
+    "rel": [
+      240,
+      560
+    ]
+  },
+  "star/chalk": {
+    "sweet": 1.8483,
+    "limit": 2.8042,
+    "width": 8.9,
+    "intervals": 1,
+    "rel": [
+      240,
+      560
+    ]
+  },
+  "star/room": {
+    "sweet": 1.5094,
+    "limit": 2.1571,
+    "width": 8.3,
+    "intervals": 1,
+    "rel": [
+      240,
+      560
+    ]
+  },
+  "star/glass": {
+    "sweet": 1.4003,
+    "limit": 1.9414,
+    "width": 4.9,
+    "intervals": 1,
+    "rel": [
+      300,
+      500
+    ]
+  },
+  "star/fridge": {
+    "sweet": 1.4003,
+    "limit": 1.9414,
+    "width": 8.1,
+    "intervals": 1,
+    "rel": [
+      240,
+      560
+    ]
+  }
+}

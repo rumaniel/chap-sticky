@@ -868,18 +868,9 @@ window.ST = window.ST || {};
      * 따라도 12개 조합 중 2개(냉장고)에서만 퍼펙트가 나왔다. 분리 후 10개.
      * 검증: node tools/sim/gauge.js */
     _buildGaugeBand() {
-      const T = ST.Physics.TUNE;
-      const TANGENT_DIV = 1.21; // limit — 최악 기준. 28,297회 스윕에서 튕김 0
-      const SWEET_DIV = 1.06;   // sweet — 전형 기준. 마커 적중 시 퍼펙트 10/12 조합
-      const sumGrip = this.shape.stickyPoints.reduce((s, p) => s + p.grip, 0);
-      const limit = sumGrip * this.map.mat.grip * ST.Sticky.K_MAX;
-      const toSpeed = (vz) => Math.max(0, Math.min(T.VZ_MAX, vz)) / T.KZ;
-      this.gaugeBand = {
-        max: T.VZ_MAX / T.KZ,
-        min: ST.Input.MIN_FLICK,
-        limit: toSpeed(limit / this.shape.mass / TANGENT_DIV),
-        sweet: toSpeed(ST.Sticky.SWEET * limit / this.shape.mass / SWEET_DIV),
-      };
+      // 수식은 sticky.js 에 있다 (R15). 시뮬 하네스도 같은 함수를 쓴다 — 여기에 복사본을
+      // 두지 않는다. limit 은 최악 기준 안전 하한, sweet 은 r(s)=SWEET 의 닫힌 해.
+      this.gaugeBand = ST.Sticky.gaugeBand(this.shape, this.map, ST.Input.MIN_FLICK);
     },
 
     // 스핀 제스처 진행 중 판정 (스핀 호 표시 임계와 동일 + 최근 회전 입력)

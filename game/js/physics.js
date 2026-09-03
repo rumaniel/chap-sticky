@@ -23,6 +23,7 @@ window.ST = window.ST || {};
     VZ_MIN: 3.2, VZ_MAX: 12.5,
     KSPIN: 1.05, SPIN_MAX: 32,   // rad/s
   };
+  const H_STEP = 1 / 120; // 비행 적분 고정 스텝 (s). 60fps 프레임 = 정확히 2스텝
 
   const Physics = {
     TUNE,
@@ -76,10 +77,21 @@ window.ST = window.ST || {};
     },
 
     // 비행 적분. 결과: null(비행중) | {type:'wall'|'floor'|'past', ...}
+    // 같은 던지기는 프레임 스케줄과 무관하게 같은 곳에 같은 상태로 닿아야 한다 —
+    // tools/sim/gauge.js 검사 4 가 히치 프레임을 끼워 위치·접촉·판정 동일성을 확인한다.
     stepFlight(f, dt) {
-      const N = 2; // 서브스텝
-      for (let i = 0; i < N; i++) {
-        const h = dt / N;
+      // 고정 타임스텝 누적기. 프레임 시간을 누적해 두고 정확히 H_STEP 씩만 적분한다 —
+      // 나머지는 다음 프레임으로 이월. 60/90/120/144Hz 어디서든, 히치가 끼어도, 스텝 열이
+      // 동일하므로 같은 던지기는 비트 단위로 같은 곳에 닿는다.
+      //
+      // 이력: 처음엔 N=2 고정(스텝이 프레임에 비례 → 100ms 히치면 착탄 2cm 이동, 유리창
+      // 창틀에서 튕김), 다음엔 N=ceil(dt/H) (60Hz 는 맞췄지만 max(2,·) 때문에 120Hz 가
+      // 1/240 스텝이 돼 60Hz 와 결과가 달랐다). 둘 다 적대적 리뷰가 재현했다 (R15).
+      f.acc = (f.acc || 0) + dt;
+      while (f.acc >= H_STEP - 1e-9) {
+        f.acc -= H_STEP;
+        const h = H_STEP;
+        const px = f.x, py = f.y, pz = f.z, pvx = f.vx, pvy = f.vy, pa = f.angle, pspin = f.spin;
         f.vy -= TUNE.GRAVITY * h;
         f.vx += TUNE.MAGNUS * f.spin * f.vz * h;
         f.spin *= 1 - TUNE.SPIN_DECAY * h;
@@ -89,6 +101,20 @@ window.ST = window.ST || {};
         f.angle += f.spin * h;
 
         if (f.z >= TUNE.WALL_Z) {
+          // 벽면(z = WALL_Z)까지 서브스텝 안에서 선형 보간한다. 전에는 서브스텝 끝 상태를
+          // 그대로 충돌 상태로 썼는데, 그러면 착탄 위치·속도가 프레임 길이에 따라 흔들린다 —
+          // 100ms 히치 한 번이면 같은 던지기의 착탄 y 가 0.1m 까지 달라지고, 충격비 r 이
+          // 서브스텝 경계마다 톱니처럼 뛰었다 (R15 적대적 리뷰). 보간하면 결정론적이다.
+          const u = f.z > pz ? (TUNE.WALL_Z - pz) / (f.z - pz) : 1;
+          f.x = px + (f.x - px) * u;
+          f.y = py + (f.y - py) * u;
+          f.vx = pvx + (f.vx - pvx) * u;
+          f.vy = pvy + (f.vy - pvy) * u;
+          f.angle = pa + (f.angle - pa) * u;
+          // spin 도 충돌 시점까지만 감쇠 — resolveImpact 가 impact.spin/angle 로 패드 접촉을
+          // 정하므로 여기만 서브스텝 끝 값이면 판정이 다시 dt 에 묶인다 (Copilot 지적).
+          f.spin = pspin * (1 - TUNE.SPIN_DECAY * h * u);
+          f.z = TUNE.WALL_Z;
           const inWall =
             f.x > -TUNE.WALL_W / 2 && f.x < TUNE.WALL_W / 2 &&
             f.y > TUNE.WALL_BOTTOM && f.y < TUNE.WALL_BOTTOM + TUNE.WALL_H;
