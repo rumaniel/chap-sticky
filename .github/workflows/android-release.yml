@@ -1,8 +1,10 @@
 name: Android Release
 
-# 두 가지로 쓴다.
+# 세 가지로 쓴다.
 #   1) PR — 안드로이드 셸이나 게임 코드가 바뀌면 AAB 가 실제로 빌드되는지만 확인 (서명·업로드 없음)
-#   2) 수동 실행 — 서명된 AAB 를 만들고, publish 를 켜면 지정 트랙까지 올린다
+#   2) 태그 푸시(v*) — 서명된 AAB 를 internal 트랙에 올린다. itch 배포와 같은 태그에서 같이 나간다
+#   3) 수동 실행 — 태그 없이 확인하거나 alpha 로 올릴 때의 탈출구
+# 상위 트랙 승격(internal → alpha → production)은 어느 경우에도 콘솔에서 사람이 한다.
 on:
   pull_request:
     paths:
@@ -12,6 +14,8 @@ on:
       - 'package-lock.json'
       - 'capacitor.config.json'
       - '.github/workflows/android-release.yml'
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       publish:
@@ -36,7 +40,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: android-release-${{ github.event.pull_request.number || 'manual' }}
+  group: android-release-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
@@ -78,19 +82,33 @@ jobs:
       - name: Resolve version
         id: ver
         env:
-          PUBLISH: ${{ github.event.inputs.publish }}
+          PUBLISH_IN: ${{ github.event.inputs.publish }}
+          TRACK_IN: ${{ github.event.inputs.track }}
           PACKAGE_NAME: ${{ vars.PLAY_CONSOLE_PACKAGE_NAME }}
           SA_JSON: ${{ secrets.PLAY_CONSOLE_SERVICE_ACCOUNT }}
           VERSION_NAME_IN: ${{ github.event.inputs.version_name }}
         run: |
           set -euo pipefail
 
-          NAME="${VERSION_NAME_IN:-}"
-          if [ -z "$NAME" ]; then
-            NAME=$(node -p "require('./package.json').version")
+          PKG=$(node -p "require('./package.json').version")
+
+          # 태그 푸시면 태그가 곧 릴리즈다 — 무조건 internal 로 올린다.
+          # 태그와 package.json 이 어긋나면 여기서 멈춘다 (수동 범프의 안전장치).
+          if [ "${GITHUB_REF_TYPE:-}" = 'tag' ]; then
+            NAME="${GITHUB_REF_NAME#v}"
+            if [ "$NAME" != "$PKG" ]; then
+              echo "::error::태그 v${NAME} 와 package.json ${PKG} 이 다르다. 버전을 올리고 다시 태그할 것"
+              exit 1
+            fi
+            PUBLISH=true
+            TRACK=internal
+          else
+            NAME="${VERSION_NAME_IN:-$PKG}"
+            PUBLISH="${PUBLISH_IN:-false}"
+            TRACK="${TRACK_IN:-internal}"
           fi
 
-          if [ "${PUBLISH:-false}" != "true" ]; then
+          if [ "$PUBLISH" != "true" ]; then
             CODE="${GITHUB_RUN_NUMBER}"
             echo "publish 아님 — versionCode=$CODE (run_number)"
           else
@@ -121,6 +139,8 @@ jobs:
 
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+          echo "track=$TRACK" >> "$GITHUB_OUTPUT"
 
       # 시크릿이 없으면(아직 키를 안 만든 상태, PR 빌드) 서명 없이 진행한다.
       # 빌드 자체가 깨지지 않는지는 그대로 확인된다.
@@ -192,13 +212,13 @@ jobs:
       # alpha = 비공개 테스트. 프로덕션 액세스 심사는 이 트랙의 활동만 인정한다
       # (internal 은 카운트되지 않는다). 그 위로는 콘솔에서 승격한다.
       - name: Upload to Play
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' }}
+        if: ${{ steps.ver.outputs.publish == 'true' }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_CONSOLE_SERVICE_ACCOUNT }}
           packageName: ${{ vars.PLAY_CONSOLE_PACKAGE_NAME }}
           releaseFiles: ${{ steps.aab.outputs.path }}
-          tracks: ${{ github.event.inputs.track }}
+          tracks: ${{ steps.ver.outputs.track }}
           status: completed
 
       - name: Shred keystore

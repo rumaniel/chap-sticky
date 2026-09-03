@@ -1,13 +1,33 @@
 name: Deploy to itch.io
 
+# 배포 트리거는 태그다. main 푸시는 배포하지 않는다 —
+#   · 문서 커밋에 [skip ci] 를 손으로 붙이던 규율이 사라진다 (잊으면 그냥 새던 방식)
+#   · itch 와 Play 가 같은 태그에서 같이 나가므로 "이 버전에 뭐가 올라갔나" 가 한 줄로 답이 된다
+# 버전은 package.json 이 유일한 소스이고 태그는 그걸 가리키기만 한다 (아래 가드 참고).
+#
+#   npm version patch --no-git-tag-version   # package.json 만 올림
+#   git commit -am "chore: 1.0.1"
+#   git tag v1.0.1 && git push origin main --tags
 on:
   push:
-    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      reason:
+        description: '태그 없이 올리는 이유 (핫픽스 확인 등)'
+        type: string
+        default: ''
 
 concurrency:
   group: deploy-itch
-  cancel-in-progress: true
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   deploy:
@@ -17,6 +37,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      # 태그와 package.json 이 어긋나면 여기서 멈춘다. 수동 범프의 유일한 위험이
+      # "올리는 걸 잊는 것" 인데, 그러면 태그를 못 만들거나 이 단계에서 걸린다.
+      - name: Resolve version
+        id: ver
+        run: |
+          set -euo pipefail
+          PKG=$(node -p "require('./package.json').version")
+          SHA7="${GITHUB_SHA:0:7}"
+          if [ "${GITHUB_REF_TYPE:-}" = 'tag' ]; then
+            TAG="${GITHUB_REF_NAME#v}"
+            if [ "$TAG" != "$PKG" ]; then
+              echo "::error::태그 v${TAG} 와 package.json ${PKG} 이 다르다. 버전을 올리고 다시 태그할 것"
+              exit 1
+            fi
+            VERSION="${PKG}+${SHA7}"
+          else
+            # 수동 실행은 태그가 없으니 릴리즈가 아님을 버전에 남긴다
+            VERSION="${PKG}+dev.${GITHUB_RUN_NUMBER}.${SHA7}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "userversion: $VERSION"
 
       - name: Setup butler
         env:
@@ -39,6 +81,7 @@ jobs:
           ITCH_USER: ${{ vars.ITCH_USER }}
           ITCH_GAME: ${{ vars.ITCH_GAME }}
           ITCH_CHANNEL: ${{ vars.ITCH_CHANNEL }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
           if [ -z "${ITCH_USER:-}" ] || [ -z "${ITCH_GAME:-}" ]; then
@@ -47,9 +90,14 @@ jobs:
           fi
           channel="${ITCH_CHANNEL:-html5}"
           target="${ITCH_USER}/${ITCH_GAME}:${channel}"
-          version="1.0.${GITHUB_RUN_NUMBER}"
-          echo "Pushing game/ to ${target} (version ${version})"
-          butler push game "${target}" --userversion "${version}"
+          echo "Pushing game/ to ${target} (version ${VERSION})"
+          butler push game "${target}" --userversion "${VERSION}"
+          {
+            echo "### itch.io"
+            echo ""
+            echo "- 채널: \`${target}\`"
+            echo "- userversion: \`${VERSION}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build artifact
         if: always()

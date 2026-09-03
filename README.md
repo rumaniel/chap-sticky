@@ -23,7 +23,40 @@
 - 그래픽 = 코드 드로잉, 사운드 = WebAudio 신스 (저작권 클린)
 - `game/js/`: physics(투영·Magnus) / sticky(부착·크롤다운) / shapes(모형+끈적부위) / materials(맵) / modes / ui / score / audio / input / main
 
-## 배포
+## 배포 · 버저닝
 
-`main` 푸시 시 GitHub Actions가 butler로 itch.io에 자동 배포 (`.github/workflows/deploy.yml`).
-필요 설정: secret `BUTLER_API_KEY`, vars `ITCH_USER`, `ITCH_GAME`, (선택) `ITCH_CHANNEL`.
+**버전의 유일한 소스는 `package.json` 의 `version` 이다.** 사람이 손으로 올리고,
+태그는 그걸 가리키기만 한다. 태그와 다르면 워크플로가 멈춘다.
+
+| 자리 | 값 | 누가 |
+|---|---|---|
+| `package.json` version | `1.0.1` | **사람** (유일한 수동 숫자) |
+| itch userversion | `1.0.1+a1b2c3d` | 자동 (버전 + 커밋 sha7) |
+| Play versionName | `1.0.1` | 자동 (버전 그대로) |
+| Play versionCode | Play 최대값 + 1 | 자동 (Play API 조회) |
+
+올리는 기준 — **PATCH**: 버그·밸런스 / **MINOR**: 새 콘텐츠·기능(맵·모형·업적) / MAJOR: 안 씀.
+
+### 내보내는 법
+
+```bash
+# 1) 버전 올리고 커밋
+npm version patch --no-git-tag-version     # 또는 minor
+git commit -am "chore: 1.0.1"
+git push origin main
+
+# 2) 태그를 밀면 itch + Play internal 이 같이 나간다
+git tag v1.0.1 && git push origin v1.0.1
+```
+
+`main` 푸시는 **배포하지 않는다.** 문서 커밋에 `[skip ci]` 를 붙이던 규율이 필요 없고,
+itch 와 Play 가 같은 태그에서 나가므로 "이 버전에 뭐가 올라갔나" 가 한 줄로 답이 된다.
+상위 트랙 승격(internal → alpha → production)은 언제나 Play Console 에서 사람이 한다.
+
+태그 없이 올려야 하면 두 워크플로 다 `workflow_dispatch` 로 수동 실행할 수 있다
+(itch 는 `+dev.<run>.<sha>` 로 표시되고, Play 는 트랙을 고를 수 있다).
+
+필요 설정: secret `BUTLER_API_KEY` · `ANDROID_KEYSTORE_BASE64` · `ANDROID_KEYSTORE_PASSWORD` ·
+`ANDROID_KEYALIAS_PASSWORD` · `PLAY_CONSOLE_SERVICE_ACCOUNT`,
+vars `ITCH_USER` · `ITCH_GAME` · (선택) `ITCH_CHANNEL` · `ANDROID_KEYALIAS_NAME` ·
+`PLAY_CONSOLE_PACKAGE_NAME`.
