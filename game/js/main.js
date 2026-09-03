@@ -295,7 +295,12 @@ window.ST = window.ST || {};
       const I = ST.Input;
       I.grabTest = (x, y) => this.state === 'aim' &&
         Math.hypot(x - this.toyScreen.x, y - this.toyScreen.y) < 115;
-      I.onGrab = () => { ST.Audio.play('grab'); };
+      I.onGrab = () => {
+        ST.Audio.play('grab');
+        // 턴 배너(1.2초)가 벽 중앙을 덮는데 입력은 즉시 열린다 — 재배치된 스팟 9개 중
+        // 8개가 배너 아래다 (R16). 잡는 순간 페이드아웃으로 넘겨 조준 시야를 비운다.
+        if (this.banner && this.banner.t > 0.3) this.banner.t = 0.3;
+      };
       I.onHoldMove = (p) => {
         this.toyScreen.x = Math.max(35, Math.min(445, p.x));
         this.toyScreen.y = Math.max(330, Math.min(775, p.y));

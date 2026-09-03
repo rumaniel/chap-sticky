@@ -172,8 +172,19 @@ itch 가이드와 같은 순서 추천 (조작 → 모드):
 | 4 | 파티 동시 크롤 | `itch_s4_party.png` |
 | 5 | 유리창 맵 (재질 차이) | `itch_s5_glass.png` |
 
-렌더 방법은 `docs/RESOURCES.md` 의 헤드리스 캡처 절차와 동일하되 캔버스를 1080×1920,
-`ST.view.scale` 을 그에 맞춰 잡는다. `G.banner = null` 로 턴 배너를 지워야 화면이 가려지지 않는다.
+재촬영 절차 (2026-09-02 부터 스크립트화):
+
+```bash
+python tools/capture/save_server.py          # PNG 수신 (8124)
+# 게임을 localhost:8123 으로 띄운 뒤, 페이지 콘솔에서 tools/capture/scenes.js 내용을 실행
+python tools/gen_play_assets.py              # itch 960x1600 → Play 1080x1920 프레이밍
+```
+
+`scenes.js` 는 게임 렌더러로 5장을 960×1600(가상 480×800 의 2배)에 찍는다 — 벽 캐시가
+캔버스 해상도로 만들어지므로 `setup()` 전에 크기를 잡아야 선명하다. 씬 구성(조준은
+`I.holding`+`I.liveFlick`, 커브는 `I.spinCharge`, 파티는 던지기 사이에 `update()` 를
+직접 돌려 타이머를 진행)은 파일 주석 참고. 브라우저 탭이 백그라운드면 rAF 가 멈추므로
+게임 상태 전이를 기다릴 때는 `update()` 를 직접 호출해야 한다.
 
 ---
 

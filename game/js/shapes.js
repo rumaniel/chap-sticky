@@ -138,7 +138,7 @@ window.ST = window.ST || {};
 
     // ============ 문어 ============
     octo: {
-      id: 'octo', name: '문어찐득', desc: '다리 끝 8곳이 끈적', unlock: 5000,
+      id: 'octo', name: '문어찐득', desc: '다리 끝 8곳이 끈적', unlock: 10000,
       mass: 1.1, decayMod: 0.85, radius: 0.95, rollStep: Math.PI / 2,
       color: '#e88ac8', dark: '#b45a99', light: '#ffc6ec',
       stickyPoints: (function () {
@@ -159,27 +159,37 @@ window.ST = window.ST || {};
         ctx.scale(1 / sq, sq);
         const sway = (ph) => Math.sin(t * 14 + ph) * wob * S * 0.12;
 
+        // 다리 (R2): 가늘고 곧게 뻗으면 세균 섬모처럼 보인다. 조금 두껍게 + 밑동 이중
+        // 스트로크로 테이퍼 + 제어점을 반경의 수직 방향으로 밀어 한 방향으로 말리는 컬.
+        // 패드가 반경 0.78~0.92 라 다리가 길 수는 없다 — 돔을 키우면 다리를 먹으므로
+        // 오히려 살짝 줄였다 (0.50 → 0.46). 변형 4종을 나란히 렌더해 골랐다.
+        // 끝점(stickyPoints)은 그대로 — 물리 불변.
         ctx.strokeStyle = this.color;
+        ctx.lineCap = 'round';
         this.stickyPoints.forEach((p, i) => {
           const tx = p.x * S + sway(i * 1.7), ty = p.y * S + sway(i * 1.7 + 2) * 0.6;
-          // 중심에서 방사형 곡선 다리
-          const mx = p.x * 0.55 * S + sway(i * 1.3) * 0.5;
-          const my = p.y * 0.55 * S - Math.abs(p.x) * 0.12 * S;
+          const mx = (p.x * 0.60 - p.y * 0.18) * S + sway(i * 1.3) * 0.5;
+          const my = (p.y * 0.60 + p.x * 0.18) * S;
+          const bx = p.x * 0.2 * S, by = p.y * 0.2 * S;
           ctx.beginPath();
-          ctx.lineCap = 'round';
-          ctx.lineWidth = S * 0.15;
-          ctx.moveTo(p.x * 0.18 * S, p.y * 0.18 * S);
+          ctx.lineWidth = S * 0.20;
+          ctx.moveTo(bx, by);
+          ctx.quadraticCurveTo((bx + mx) / 2, (by + my) / 2, mx, my);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.lineWidth = S * 0.16;
+          ctx.moveTo(bx, by);
           ctx.quadraticCurveTo(mx, my, tx, ty);
           ctx.stroke();
           stickyGlow(ctx, { x: tx / S, y: ty / S }, S, contacts && contacts.has(p.id));
-          blob(ctx, tx, ty, S * 0.12, this.light);
+          blob(ctx, tx, ty, S * 0.13, this.light);
         });
 
         // 머리 돔 (중앙)
         const hy = -0.1 * S + sway(5) * 0.4;
         ctx.beginPath();
         ctx.fillStyle = this.color;
-        ctx.ellipse(0, hy, 0.5 * S, 0.52 * S, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, hy, 0.46 * S, 0.50 * S, 0, 0, Math.PI * 2);
         ctx.fill();
         gloss(ctx, -0.15 * S, hy - 0.18 * S, 0.15 * S, 0.09 * S);
         face(ctx, 0, hy + 0.02 * S, S * 0.8, opt.mood || 'happy');
@@ -189,7 +199,7 @@ window.ST = window.ST || {};
 
     // ============ 별 ============
     star: {
-      id: 'star', name: '별찐득', desc: '꼭짓점 5곳이 끈적 · 가볍다', unlock: 15000,
+      id: 'star', name: '별찐득', desc: '꼭짓점 5곳이 끈적 · 가볍다', unlock: 45000,
       mass: 0.8, decayMod: 1.2, juiceMod: 1.12, radius: 0.95, rollStep: (2 * Math.PI) / 5,
       color: '#ffd94f', dark: '#d9a520', light: '#fff3b0',
       stickyPoints: (function () {
